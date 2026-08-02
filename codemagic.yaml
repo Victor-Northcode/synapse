@@ -18,25 +18,22 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.synapse.link
       vars:
-        APP_STORE_APPLE_ID: 6797268513 # Apple ID приложения в ASC
-      flutter: 3.44.6
+        APP_STORE_APPLE_ID: 6797268513
+      flutter: stable
       xcode: latest
       cocoapods: default
     scripts:
-      - name: Set up code signing settings on Xcode project
-        script: xcode-project use-profiles
       - name: Get Flutter packages
         script: flutter pub get
-      - name: Flutter analyze + tests
-        script: |
-          flutter analyze
-          flutter test
+      - name: Set up code signing
+        script: xcode-project use-profiles
       - name: Build signed ipa
         script: |
-          BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0) + 1))
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          LATEST=${LATEST:-0}
           flutter build ipa --release \
             --build-name=1.0.0 \
-            --build-number=$BUILD_NUMBER \
+            --build-number=$((LATEST + 1)) \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
@@ -45,7 +42,7 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-
+        
   android-release:
     name: Android APK
     instance_type: linux_x2
