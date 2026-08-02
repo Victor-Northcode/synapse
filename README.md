@@ -25,6 +25,14 @@ iOS-проект полностью подготовлен (портретная
 тестовый GADApplicationIdentifier) — на Mac достаточно открыть проект,
 выбрать команду подписи и выполнить `flutter build ipa`.
 
+Без Mac под рукой IPA собирает workflow `.github/workflows/ios-ipa.yml`
+(репозиторий Victor-Northcode/synapse, приватный): GitHub Actions
+запускает облачный macOS-раннер, собирает `flutter build ios --no-codesign`
+и выкладывает `SYNAPSE-unsigned.ipa` артефактом. Запуск — любым пушем в
+main или кнопкой «Run workflow». IPA не подписан: для установки нужен
+Sideloadly/AltStore (подпишут вашим Apple ID) или сертификат разработчика
+в секретах репозитория — для TestFlight/App Store.
+
 Проверки:
 
 ```bash
