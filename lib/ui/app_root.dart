@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../core/ads.dart';
 import '../core/audio.dart';
 import '../core/haptics.dart';
+import '../core/leaderboard.dart';
 import '../core/palette.dart';
 import '../state/app_state.dart';
 import '../state/play_state.dart';
@@ -16,6 +17,7 @@ import 'overlays/result_overlay.dart';
 import 'overlays/story_overlay.dart';
 import 'screens/boot_screen.dart';
 import 'screens/hub_screen.dart';
+import 'screens/leaderboard_screen.dart';
 import 'screens/play_screen.dart';
 import 'screens/settings_screen.dart';
 import 'widgets/common.dart';
@@ -31,6 +33,7 @@ class AppRoot extends StatefulWidget {
 class _AppRootState extends State<AppRoot> {
   bool booting = true;
   bool settings = false;
+  bool showLb = false;
   PlayState? play;
   bool showResult = false;
   StoryMode? storyMode;
@@ -174,6 +177,10 @@ class _AppRootState extends State<AppRoot> {
       setState(() => showPrivacy = false);
       return true;
     }
+    if (showLb) {
+      setState(() => showLb = false);
+      return true;
+    }
     if (storyMode == StoryMode.dayScene || storyMode == StoryMode.chapterFinale) {
       _closeStory();
       return true;
@@ -298,6 +305,15 @@ class _AppRootState extends State<AppRoot> {
                 ),
               ),
 
+            // Топ операторов.
+            if (showLb)
+              Positioned.fill(
+                child: PopIn(
+                  child: LeaderboardScreen(
+                      app: app, onClose: () => setState(() => showLb = false)),
+                ),
+              ),
+
             // Политика.
             if (showPrivacy)
               Positioned.fill(
@@ -396,6 +412,22 @@ class _AppRootState extends State<AppRoot> {
           const SizedBox(width: 2),
           const ShardIcon(size: 10, color: Pal.cyan),
         ]),
+        if (Lb.instance.available) ...[
+          const SizedBox(width: 10),
+          Pressable(
+            onTap: () => setState(() => showLb = true),
+            child: Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0x59FFD400)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const GameIcon('trophy', size: 17, color: Pal.yellow),
+            ),
+          ),
+        ],
         const SizedBox(width: 10),
         Pressable(
           onTap: () => setState(() => settings = !settings),

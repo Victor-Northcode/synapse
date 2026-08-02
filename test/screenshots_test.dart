@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
+import 'package:games_services/games_services.dart';
 import 'package:synapse/core/storage.dart';
+import 'package:synapse/ui/screens/leaderboard_screen.dart';
 import 'package:synapse/main.dart';
 import 'package:synapse/state/app_state.dart';
 import 'package:synapse/state/play_state.dart';
@@ -113,5 +115,55 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await expectLater(find.byType(MaterialApp), matchesGoldenFile('goldens/06-result.png'));
     stdout.writeln('shot: 06-result');
+  });
+
+  testWidgets('экран топа', skip: !autoUpdateGoldenFiles, (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+
+    SharedPreferences.setMockInitialValues({});
+    await Storage.instance.init();
+    final app = AppState()..loadSaved();
+    app.setLang('ru');
+
+    PlayerData holder(String name) =>
+        PlayerData.fromJson({'displayName': name, 'playerID': name, 'iconImage': null});
+    LeaderboardScoreData row(int rank, String name, int score) =>
+        LeaderboardScoreData(
+            rank: rank,
+            displayScore: '$score',
+            rawScore: score,
+            timestampMillis: 0,
+            scoreHolder: holder(name));
+    final rows = [
+      row(1, 'VESPER_OP', 214),
+      row(2, 'neon_kid', 187),
+      row(3, 'Оператор 9', 165),
+      row(4, 'tanglefox', 140),
+      row(5, 'MERIDIAN', 128),
+      row(6, 'wire_witch', 117),
+      row(7, 'Kestrel', 103),
+      row(8, 'plug&play', 96),
+      row(9, 'somebody', 88),
+      row(10, 'HALCYON', 71),
+    ];
+
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(brightness: Brightness.dark, fontFamily: 'JetBrains Mono'),
+      home: Scaffold(
+        body: LeaderboardScreen(
+          app: app,
+          onClose: () {},
+          previewData: (rows, row(37, 'Ты', 24)),
+        ),
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 900));
+    await expectLater(
+        find.byType(MaterialApp), matchesGoldenFile('goldens/07-leaderboard.png'));
+    stdout.writeln('shot: 07-leaderboard');
   });
 }

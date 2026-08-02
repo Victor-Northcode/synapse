@@ -8,6 +8,7 @@ import '../core/haptics.dart';
 import '../core/notifications.dart';
 import '../core/storage.dart';
 import '../data/game_data.dart';
+import '../data/lb_strings.dart';
 import '../data/story_data.dart';
 import '../data/strings.dart';
 import '../data/task_data.dart';
@@ -83,6 +84,10 @@ class AppState extends ChangeNotifier {
     final v = _d[key] ?? kStrings['en']![key];
     return v is List ? List<String>.from(v) : const [];
   }
+
+  /// Строки экрана лидеров (добавлены поверх исходного словаря).
+  String lt(String key) =>
+      kLbStrings[lang]?[key] ?? kLbStrings['en']![key] ?? key;
 
   // ---------- загрузка/сохранение ----------
   void loadSaved() {

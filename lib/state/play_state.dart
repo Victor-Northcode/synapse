@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/audio.dart';
 import '../core/haptics.dart';
+import '../core/leaderboard.dart';
 import '../core/notifications.dart';
 import '../data/game_data.dart';
 import '../game/geometry.dart';
@@ -650,6 +651,8 @@ class PlayState extends ChangeNotifier {
     } else {
       app.reschedulePush();
     }
+    // Очки в таблицы лидеров: «распутано связей» = пройденный уровень.
+    Lb.instance.submit(app.level - 1);
     result = LevelResult(true, got, (cleanRun ? 1 : 0) + (skillBonus ? 1 : 0), level,
         crossings, nodes.length, edges.length, spec(app.level).n);
     app.notify();

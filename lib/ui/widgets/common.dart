@@ -186,6 +186,12 @@ class _PressableState extends State<Pressable> {
   }
 }
 
+/// Иконки, дорисованные к спрайту игры в том же стиле (24x24, контур 1.8).
+const Map<String, String> kExtraIcons = {
+  'trophy':
+      '<path d="M8 4.5h8v5a4 4 0 0 1-8 0Z"/><path d="M8 5.5H5.2v1.2A2.8 2.8 0 0 0 8 9.5M16 5.5h2.8v1.2A2.8 2.8 0 0 1 16 9.5"/><path d="M12 13.5v3"/><path d="M10.3 16.5h3.4a1 1 0 0 1 1 1V20H9.3v-2.5a1 1 0 0 1 1-1Z"/>',
+};
+
 /// Иконка из спрайта игры: 24x24, контур 1.8 текущим цветом.
 class GameIcon extends StatelessWidget {
   final String name;
@@ -197,7 +203,7 @@ class GameIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final inner = kIconPaths[name];
+    final inner = kIconPaths[name] ?? kExtraIcons[name];
     if (inner == null) return SizedBox.square(dimension: size);
     final svg = solid
         ? '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none">$inner</svg>'

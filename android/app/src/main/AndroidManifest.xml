@@ -34,6 +34,14 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3940256099942544~3347511713"/>
+
+        <!-- Play Games Services (лидерборды). Project ID из Play Console →
+             Play Games Services → Configuration. Пока стоит заглушка —
+             код не обращается к сервису, пока не заполнен id таблицы
+             в lib/core/leaderboard.dart. -->
+        <meta-data
+            android:name="com.google.android.gms.games.APP_ID"
+            android:value="@string/game_services_project_id"/>
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
