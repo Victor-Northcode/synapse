@@ -9,12 +9,29 @@ import 'core/palette.dart';
 import 'core/storage.dart';
 import 'state/app_state.dart';
 import 'ui/app_root.dart';
+import 'ui/layout.dart';
+
+/// Телефон играется только вертикально — головоломка на боку
+/// превращается в нечитаемую полосу. Планшету разрешаем всё: там
+/// альбомный режим раскладывается в две колонки.
+Future<void> applyOrientations() async {
+  final view = WidgetsBinding.instance.platformDispatcher.views.first;
+  final size = view.physicalSize / view.devicePixelRatio;
+  final isTablet = size.shortestSide >= 600;
+  await SystemChrome.setPreferredOrientations(isTablet
+      ? const [
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]
+      : const [DeviceOrientation.portraitUp]);
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Игра вертикальная: головоломка не читается в ландшафте.
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  await applyOrientations();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -58,11 +75,14 @@ class SynapseApp extends StatelessWidget {
         ),
         builder: (context, child) {
           // Системное масштабирование шрифта не должно ломать вёрстку HUD.
+          // На планшете весь интерфейс идёт на шаг крупнее.
           final mq = MediaQuery.of(context);
+          final tabletScale = Layout.of(context).textScale;
           return MediaQuery(
             data: mq.copyWith(
               textScaler: mq.textScaler
-                  .clamp(minScaleFactor: 1.0, maxScaleFactor: 1.2),
+                  .clamp(minScaleFactor: 1.0, maxScaleFactor: 1.2)
+                  .clamp(minScaleFactor: tabletScale, maxScaleFactor: 1.2 * tabletScale),
             ),
             child: child!,
           );

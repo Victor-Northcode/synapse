@@ -15,7 +15,10 @@ void main() {
     Size(320, 568), // iPhone SE 1-го поколения
     Size(360, 640), // компактный Android
     Size(430, 932), // iPhone Pro Max
-    Size(800, 1280), // планшет
+    Size(768, 1024), // iPad портрет
+    Size(1024, 768), // iPad альбом
+    Size(1366, 1024), // iPad Pro 12.9 альбом
+    Size(800, 1280), // планшет Android портрет
   ];
   const langs = ['ru', 'de', 'ar', 'ja'];
 

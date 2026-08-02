@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/audio.dart';
 import '../../core/palette.dart';
 import '../../state/app_state.dart';
+import '../layout.dart';
 import '../widgets/common.dart';
 import '../widgets/scene_widget.dart';
 
@@ -94,6 +95,73 @@ class _StoryOverlayState extends State<StoryOverlay> {
     final prevCnt = math.min(30, 12 + (app.chapter - 1) * 2);
     final prevDays = math.min(6, 4 + (app.chapter - 1) ~/ 2);
 
+    final l = Layout.of(context);
+    // Альбом: сцена слева, текст и кнопка справа — иначе картинка
+    // съедает всю высоту и до текста нужно скроллить.
+    if (l.twoColumn) {
+      return Container(
+        decoration: const BoxDecoration(gradient: Pal.fieldGradient),
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(l.gutter),
+            child: Row(children: [
+              Expanded(
+                flex: 5,
+                child: Center(
+                  child: SceneWidget(scene,
+                      lit: widget.mode == StoryMode.dayScene
+                          ? (widget.day + 1) / math.max(1, app.days)
+                          : .5,
+                      assemble: isFinale),
+                ),
+              ),
+              SizedBox(width: l.gutter),
+              Expanded(
+                flex: 5,
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Expanded(
+                    child: Center(
+                      child: SingleChildScrollView(
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          if (isFinale) ...[
+                            Text(
+                              app.t('chapterDone').replaceAll('{n}', romanOf(app.chapter)),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontFamily: Fonts.mono,
+                                  fontSize: 9.5,
+                                  letterSpacing: 2.9,
+                                  color: Pal.dim),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(app.modelName(app.chapter - 1),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    fontFamily: Fonts.disp,
+                                    fontSize: 19,
+                                    letterSpacing: 3.4,
+                                    color: Pal.text)),
+                            const SizedBox(height: 16),
+                          ],
+                          _StoryText(text: text, key: ValueKey('l-$page-${widget.mode}')),
+                          if (widget.mode == StoryMode.intro) ...[
+                            const SizedBox(height: 18),
+                            _dots(),
+                          ],
+                        ]),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _nextButton(app, isFinale),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+      );
+    }
+
     return Container(
       decoration: const BoxDecoration(gradient: Pal.fieldGradient),
       child: SafeArea(
@@ -135,19 +203,7 @@ class _StoryOverlayState extends State<StoryOverlay> {
                     _StoryText(text: text, key: ValueKey('$page-${widget.mode}')),
                     if (widget.mode == StoryMode.intro) ...[
                       const SizedBox(height: 18),
-                      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        for (var i = 0; i < 5; i++)
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            margin: const EdgeInsets.symmetric(horizontal: 3.5),
-                            width: i == page ? 20 : 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: i == page ? Pal.mag : Pal.dotOff,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                          ),
-                      ]),
+                      _dots(),
                     ],
                     if (isFinale) ...[
                       const SizedBox(height: 22),
@@ -214,40 +270,56 @@ class _StoryOverlayState extends State<StoryOverlay> {
               ),
             ),
             const SizedBox(height: 14),
-            AnimatedOpacity(
-              duration: const Duration(milliseconds: 250),
-              opacity: _locked ? .35 : 1,
-              child: PillButton(
-                onTap: _next,
-                minHeight: 76,
-                child: switch (widget.mode) {
-                  StoryMode.intro =>
-                    Text(page >= 4 ? app.t('beginBtn') : app.t('nextBtn')),
-                  StoryMode.dayScene => Text(app.t('nextBtn')),
-                  StoryMode.chapterFinale => Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(app
-                            .t('chapterNext')
-                            .replaceAll('{n}', romanOf(app.chapter + 1))),
-                        const SizedBox(height: 4),
-                        Text(
-                          app
-                              .t('chapterNewModel')
-                              .replaceAll('{b}', app.modelName(app.chapter)),
-                          style: TextStyle(
-                              fontFamily: Fonts.mono,
-                              fontSize: 10,
-                              letterSpacing: 1.4,
-                              color: const Color(0xFF1A0512).withValues(alpha: .7)),
-                        ),
-                      ],
-                    ),
-                },
-              ),
-            ),
+            _nextButton(app, isFinale),
           ]),
         ),
+      ),
+    );
+  }
+
+  /// Точки-прогресс вступления.
+  Widget _dots() {
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      for (var i = 0; i < 5; i++)
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.symmetric(horizontal: 3.5),
+          width: i == page ? 20 : 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: i == page ? Pal.mag : Pal.dotOff,
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+    ]);
+  }
+
+  Widget _nextButton(AppState app, bool isFinale) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 250),
+      opacity: _locked ? .35 : 1,
+      child: PillButton(
+        onTap: _next,
+        minHeight: 76,
+        child: switch (widget.mode) {
+          StoryMode.intro => Text(page >= 4 ? app.t('beginBtn') : app.t('nextBtn')),
+          StoryMode.dayScene => Text(app.t('nextBtn')),
+          StoryMode.chapterFinale => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(app.t('chapterNext').replaceAll('{n}', romanOf(app.chapter + 1))),
+                const SizedBox(height: 4),
+                Text(
+                  app.t('chapterNewModel').replaceAll('{b}', app.modelName(app.chapter)),
+                  style: TextStyle(
+                      fontFamily: Fonts.mono,
+                      fontSize: 10,
+                      letterSpacing: 1.4,
+                      color: const Color(0xFF1A0512).withValues(alpha: .7)),
+                ),
+              ],
+            ),
+        },
       ),
     );
   }

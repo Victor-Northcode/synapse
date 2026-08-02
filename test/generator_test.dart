@@ -3,6 +3,26 @@ import 'package:synapse/game/geometry.dart';
 import 'package:synapse/game/level.dart';
 
 void main() {
+  test('каждый уровень решаем на любом размере поля', () {
+    // (ширина, высота, масштаб) — телефон, планшет портрет, планшет альбом.
+    const fields = [
+      (360.0, 460.0, 1.0),
+      (700.0, 900.0, 1.7),
+      (900.0, 780.0, 1.7),
+    ];
+    for (final (fw, fh, sc) in fields) {
+      for (var lvl = 1; lvl <= 60; lvl++) {
+        final l = generateLevel(lvl, fw, fh, chapter: 2, curDay: 1, scale: sc);
+        final sol = [for (var i = 0; i < l.nodes.length; i++) l.sockets[i]];
+        expect(countCross(sol, l.edges), 0,
+            reason: 'уровень $lvl на поле ${fw}x$fh (масштаб $sc) нерешаем');
+        expect(l.nodes.length, greaterThanOrEqualTo(4),
+            reason: 'слишком мало узлов на поле ${fw}x$fh');
+        expect(l.slotOf.toSet().length, l.slotOf.length);
+      }
+    }
+  });
+
   test('каждый сгенерированный уровень имеет решение без пересечений', () {
     for (var lvl = 1; lvl <= 60; lvl++) {
       for (var rep = 0; rep < 3; rep++) {

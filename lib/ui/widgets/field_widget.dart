@@ -131,7 +131,8 @@ class _FieldWidgetState extends State<FieldWidget> with SingleTickerProviderStat
 
   int _nodeAt(Offset p) {
     var best = -1;
-    var bd = 26.0; // хитбокс узла ~40px
+    // Хитбокс чуть больше самого разъёма и растёт вместе с ним.
+    var bd = 26.0 * widget.play.scale;
     for (var i = 0; i < widget.play.nodes.length; i++) {
       final n = widget.play.nodes[i];
       final d = (Offset(n[0], n[1]) - p).distance;
@@ -241,6 +242,9 @@ class _FieldPainter extends CustomPainter {
     required this.boomTint,
   });
 
+  /// Множитель геометрии: на планшете всё крупнее.
+  double get g => play.scale;
+
   double get _pulse => (now % 1600) / 1600; // общий пульс для анимаций
 
   @override
@@ -290,18 +294,18 @@ class _FieldPainter extends CustomPainter {
     for (var k = 0; k < play.sockets.length; k++) {
       final q = play.sockets[k];
       final c = Offset(q[0], q[1]);
-      canvas.drawCircle(c, 20, Paint()..color = const Color(0xFF0C1420));
+      canvas.drawCircle(c, 20 * g, Paint()..color = const Color(0xFF0C1420));
       canvas.drawCircle(
           c,
           20,
           Paint()
             ..style = PaintingStyle.stroke
-            ..strokeWidth = dragging ? 2.4 : 1.2
+            ..strokeWidth = (dragging ? 2.4 : 1.2) * g
             ..color = dragging ? const Color(0xF200E5FF) : const Color(0x2996BEEB));
       if (dragging) {
-        canvas.drawCircle(c, 20, Paint()..color = const Color(0x2900E5FF));
+        canvas.drawCircle(c, 20 * g, Paint()..color = const Color(0x2900E5FF));
       }
-      canvas.drawCircle(c, 16, Paint()..color = const Color(0xFF04080E));
+      canvas.drawCircle(c, 16 * g, Paint()..color = const Color(0xFF04080E));
       // Верхняя тёмная и нижняя светлая дуги — объём каверны.
       final arc = Paint()
         ..style = PaintingStyle.stroke
@@ -312,7 +316,7 @@ class _FieldPainter extends CustomPainter {
         ..strokeWidth = 2
         ..color = const Color(0x6BAACDF5);
       canvas.drawArc(Rect.fromCircle(center: c, radius: 16), math.pi * .2, math.pi * .6, false, arc);
-      _dashedCircle(canvas, c, 8,
+      _dashedCircle(canvas, c, 8 * g,
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.3
@@ -381,7 +385,7 @@ class _FieldPainter extends CustomPainter {
         ny = -ny;
       }
     }
-    final m = mat.w;
+    final m = mat.w * g;
     final opacity = ghost ? 0.09 : (boomTint ? 0.25 : 1.0);
     final boost = flash ? .35 : 0.0;
 
@@ -409,24 +413,24 @@ class _FieldPainter extends CustomPainter {
     // Тень — в экранных координатах, свет сверху-слева.
     final shadow = stroke(CableW.shadow * k * m, Color.fromRGBO(0, 0, 0, .4 * opacity))
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
-    canvas.drawPath(path.shift(const Offset(3, 6)), shadow);
+    canvas.drawPath(path.shift(Offset(3 * g, 6 * g)), shadow);
 
     final dashPat = dash ? const [15.0, 10.0] : null;
     drawLayer(CableW.base * k * m,
         lc(pal.l0).withValues(alpha: (mat.texMode == 'core' ? .5 : 1) * opacity), 0);
     drawLayer(CableW.mid * k * m,
-        lc(pal.l1).withValues(alpha: (mat.texMode == 'core' ? .72 : 1) * opacity), 0.5,
+        lc(pal.l1).withValues(alpha: (mat.texMode == 'core' ? .72 : 1) * opacity), 0.5 * g,
         dashPat: dashPat);
-    drawLayer(CableW.top * k * m, lc(pal.l2), 2, dashPat: dashPat);
+    drawLayer(CableW.top * k * m, lc(pal.l2), 2 * g, dashPat: dashPat);
     if (mat.hi > 0) {
-      drawLayer(CableW.hi * k * m, lc(pal.l3).withValues(alpha: mat.hi * opacity), 3.6,
+      drawLayer(CableW.hi * k * m, lc(pal.l3).withValues(alpha: mat.hi * opacity), 3.6 * g,
           dashPat: dashPat);
     }
     // Фактура материала (жила/оплётка/спираль).
     if (mat.texMode != null) {
       final tw = CableW.base * k * m * mat.texWidth;
       final tc = mat.texMode == 'weave' ? const Color(0xFF06090F) : pal.l3;
-      final ta = mat.texMode == 'core' ? 1.2 : 2.6;
+      final ta = (mat.texMode == 'core' ? 1.2 : 2.6) * g;
       final texPaint = stroke(tw, lc(tc).withValues(alpha: mat.texOpacity * opacity))
         ..strokeCap = mat.texMode == 'core' ? StrokeCap.round : StrokeCap.butt;
       final p = path.shift(Offset(nx * ta, ny * ta));
@@ -466,7 +470,7 @@ class _FieldPainter extends CustomPainter {
         Offset(p[0], p[1]),
         Offset(q[0], q[1]),
         Paint()
-          ..strokeWidth = 3
+          ..strokeWidth = 3 * g
           ..strokeCap = StrokeCap.round
           ..color = const Color(0x80FFD400),
       );
@@ -478,16 +482,16 @@ class _FieldPainter extends CustomPainter {
     final q = play.sockets[play.pickIdx];
     final c = Offset(q[0], q[1]);
     final s = 1 + 0.14 * math.sin(_pulse * 2 * math.pi).abs();
-    canvas.drawCircle(c, 15 * s, Paint()..color = const Color(0x29FFD400));
+    canvas.drawCircle(c, 15 * s * g, Paint()..color = const Color(0x29FFD400));
     canvas.drawCircle(
         c,
-        15 * s,
+        15 * s * g,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
+          ..strokeWidth = 2 * g
           ..color = Pal.yellow);
     // Молния в центре — вектор, а не эмодзи-глиф.
-    const bs = 8.0;
+    final bs = 8.0 * g;
     final bolt = Path()
       ..moveTo(c.dx + .25 * bs, c.dy - bs)
       ..lineTo(c.dx - .55 * bs, c.dy + .15 * bs)
@@ -549,14 +553,14 @@ class _FieldPainter extends CustomPainter {
         ringW = 4;
       }
       if (ring != null) {
-        canvas.drawCircle(Offset.zero, 20 + ringW / 2,
+        canvas.drawCircle(Offset.zero, 20 * g + ringW / 2,
             Paint()..color = ring..style = PaintingStyle.stroke..strokeWidth = ringW);
       }
 
       // Тень.
       canvas.drawCircle(
-          const Offset(0, 5),
-          20,
+          Offset(0, 5 * g),
+          20 * g,
           Paint()
             ..color = const Color(0x9E000000)
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
@@ -568,11 +572,11 @@ class _FieldPainter extends CustomPainter {
           end: Alignment.bottomRight,
           colors: [Color(0xFFDCE6F2), Color(0xFF93A2B6), Color(0xFF4C596B), Color(0xFF7C8A9C)],
           stops: [0, .34, .62, 1],
-        ).createShader(Rect.fromCircle(center: Offset.zero, radius: 20));
-      canvas.drawCircle(Offset.zero, 20, flange);
+        ).createShader(Rect.fromCircle(center: Offset.zero, radius: 20 * g));
+      canvas.drawCircle(Offset.zero, 20 * g, flange);
       canvas.drawCircle(
           Offset.zero,
-          20,
+          20 * g,
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1
@@ -583,8 +587,8 @@ class _FieldPainter extends CustomPainter {
         ..shader = const RadialGradient(
           center: Alignment(0, -.36),
           colors: [Color(0xFF101A26), Color(0xFF03060B)],
-        ).createShader(Rect.fromCircle(center: Offset.zero, radius: 15));
-      canvas.drawCircle(Offset.zero, 15, cavity);
+        ).createShader(Rect.fromCircle(center: Offset.zero, radius: 15 * g));
+      canvas.drawCircle(Offset.zero, 15 * g, cavity);
 
       // Ядро: цвет состояния.
       final (coreHi, coreMid, coreLo) = _coreColors(i, t, clean, isDrag);
@@ -593,11 +597,11 @@ class _FieldPainter extends CustomPainter {
           center: const Alignment(-.16, -.32),
           colors: [coreHi, coreMid, coreLo],
           stops: const [0, .38, 1],
-        ).createShader(Rect.fromCircle(center: Offset.zero, radius: 9));
+        ).createShader(Rect.fromCircle(center: Offset.zero, radius: 9 * g));
       // Свечение ядра.
-      canvas.drawCircle(Offset.zero, 9,
+      canvas.drawCircle(Offset.zero, 9 * g,
           Paint()..color = coreMid.withValues(alpha: .5)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
-      canvas.drawCircle(Offset.zero, 9, core);
+      canvas.drawCircle(Offset.zero, 9 * g, core);
 
       canvas.restore();
 
@@ -614,7 +618,7 @@ class _FieldPainter extends CustomPainter {
           ),
           textDirection: TextDirection.ltr,
         )..layout();
-        final bc = c + const Offset(12, -20);
+        final bc = c + Offset(12 * g, -20 * g);
         canvas.drawRRect(
           RRect.fromRectAndRadius(
               Rect.fromCenter(
@@ -657,7 +661,7 @@ class _FieldPainter extends CustomPainter {
   void _paintSnapRings(Canvas canvas) {
     for (final (p, t0) in snapRings) {
       final k = ((now - t0) / 430).clamp(0.0, 1.0);
-      final r = 20 + 32 * k;
+      final r = (20 + 32 * k) * g;
       canvas.drawCircle(
           Offset(p[0], p[1]),
           r,

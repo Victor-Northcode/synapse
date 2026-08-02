@@ -5,6 +5,7 @@ import '../../core/palette.dart';
 import '../../data/game_data.dart';
 import '../../game/level.dart';
 import '../../state/app_state.dart';
+import '../layout.dart';
 import '../widgets/common.dart';
 
 /// Хаб: карточка модели, вкладки «стойка»/«склад».
@@ -22,33 +23,68 @@ class _HubScreenState extends State<HubScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
-        _HubCard(app: app),
-        const SizedBox(height: 16),
-        Row(children: [
-          Expanded(child: _tabButton(app.t('tab0'), 0)),
-          const SizedBox(width: 10),
-          Expanded(child: _tabButton(app.t('tab2'), 1)),
-        ]),
-        const SizedBox(height: 14),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 260),
-          switchInCurve: Curves.easeOutCubic,
-          transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
-            child: SlideTransition(
-              position: Tween(begin: const Offset(0, .03), end: Offset.zero).animate(anim),
+    final l = Layout.of(context);
+
+    final tabs = Row(children: [
+      Expanded(child: _tabButton(app.t('tab0'), 0)),
+      const SizedBox(width: 10),
+      Expanded(child: _tabButton(app.t('tab2'), 1)),
+    ]);
+    final pane = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      switchInCurve: Curves.easeOutCubic,
+      transitionBuilder: (child, anim) => FadeTransition(
+        opacity: anim,
+        child: SlideTransition(
+          position: Tween(begin: const Offset(0, .03), end: Offset.zero).animate(anim),
+          child: child,
+        ),
+      ),
+      child: Column(
+        key: ValueKey(tab),
+        children: tab == 0 ? _pane0(app) : _pane1(app),
+      ),
+    );
+
+    // Альбом на планшете: слева карточка модели и вкладки, справа —
+    // содержимое вкладки со своей прокруткой.
+    if (l.twoColumn) {
+      // Колонки центрируются по вертикали, но прокручиваются, если
+      // контента больше высоты экрана.
+      Widget col(Widget child) => Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
               child: child,
             ),
+          );
+      return Padding(
+        padding: EdgeInsets.fromLTRB(l.gutter, 4, l.gutter, l.gutter),
+        child: Row(children: [
+          Expanded(
+            flex: 5,
+            child: col(Column(children: [
+              _HubCard(app: app),
+              const SizedBox(height: 16),
+              tabs,
+            ])),
           ),
-          child: Column(
-            key: ValueKey(tab),
-            children: tab == 0 ? _pane0(app) : _pane1(app),
-          ),
-        ),
-      ],
+          SizedBox(width: l.gutter),
+          Expanded(flex: 6, child: col(pane)),
+        ]),
+      );
+    }
+
+    return ContentColumn(
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(l.gutter, 8, l.gutter, 24),
+        children: [
+          _HubCard(app: app),
+          const SizedBox(height: 16),
+          tabs,
+          const SizedBox(height: 14),
+          pane,
+        ],
+      ),
     );
   }
 

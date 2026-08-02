@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/ads.dart';
 import '../../core/palette.dart';
 import '../../state/app_state.dart';
+import '../layout.dart';
 import '../widgets/common.dart';
 
 const kLangNames = {
@@ -28,7 +29,8 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
-    return ListView(
+    return ContentColumn(
+      child: ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         Padding(
@@ -64,6 +66,7 @@ class SettingsScreen extends StatelessWidget {
           child: Text(app.t('reset')),
         ),
       ],
+      ),
     );
   }
 

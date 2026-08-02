@@ -13,6 +13,7 @@ import 'package:synapse/main.dart';
 import 'package:synapse/state/app_state.dart';
 import 'package:synapse/state/play_state.dart';
 import 'package:synapse/ui/overlays/result_overlay.dart';
+import 'package:synapse/ui/screens/play_screen.dart';
 import 'package:synapse/ui/widgets/common.dart';
 
 Future<void> _loadFonts() async {
@@ -115,6 +116,46 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await expectLater(find.byType(MaterialApp), matchesGoldenFile('goldens/06-result.png'));
     stdout.writeln('shot: 06-result');
+  });
+
+  testWidgets('iPad альбом: хаб, игра, сюжет', skip: !autoUpdateGoldenFiles,
+      (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = const Size(1194 * 2, 834 * 2); // iPad Pro 11 альбом
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+
+    SharedPreferences.setMockInitialValues({});
+    await Storage.instance.init();
+    final app = AppState()..loadSaved();
+    app.setLang('ru');
+    app.introSeen = true;
+    app.tokens = 34;
+    app.shards = 7;
+    app.level = 12;
+
+    await tester.pumpWidget(SynapseApp(app: app));
+    await tester.pump(const Duration(milliseconds: 2100));
+    await tester.pump(const Duration(milliseconds: 400));
+    await expectLater(
+        find.byType(SynapseApp), matchesGoldenFile('goldens/08-ipad-hub.png'));
+    stdout.writeln('shot: 08-ipad-hub');
+
+    // Игровой экран в альбоме. Появление узлов завязано на реальное
+    // время, поэтому ждём по-настоящему, а не виртуальными кадрами.
+    await tester.tap(find.textContaining(RegExp('связь #')));
+    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 1600)));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 120));
+    }
+    expect(find.byType(PlayScreen), findsOneWidget,
+        reason: 'кнопка связи должна открывать уровень');
+    await expectLater(
+        find.byType(SynapseApp), matchesGoldenFile('goldens/09-ipad-play.png'));
+    stdout.writeln('shot: 09-ipad-play');
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(milliseconds: 50));
   });
 
   testWidgets('экран топа', skip: !autoUpdateGoldenFiles, (tester) async {

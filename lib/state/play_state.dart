@@ -47,6 +47,16 @@ class PlayState extends ChangeNotifier {
   final AppState app;
   double w, h;
 
+  /// Масштаб геометрии: на планшете разъёмы, кабели и зазоры крупнее,
+  /// иначе большое поле выглядит россыпью мелких точек.
+  double scale = 1;
+
+  /// Эффективный радиус узла с учётом масштаба.
+  double get r => kNodeR * scale;
+
+  static double scaleFor(double w, double h) =>
+      (math.min(w, h) / 380).clamp(1.0, 1.7);
+
   late List<Pt> nodes;
   late List<List<int>> edges;
   late List<Pt> sockets;
@@ -95,10 +105,13 @@ class PlayState extends ChangeNotifier {
   void start(int lvl) {
     level = lvl;
     kind = lvlKind(lvl);
-    var l = generateLevel(lvl, w, h, chapter: app.chapter, curDay: app.curDay);
+    scale = scaleFor(w, h);
+    var l = generateLevel(lvl, w, h,
+        chapter: app.chapter, curDay: app.curDay, scale: scale);
     var guard = 0;
     while (countCross(l.nodes, l.edges) == 0 && guard++ < 8) {
-      l = generateLevel(lvl, w, h, chapter: app.chapter, curDay: app.curDay);
+      l = generateLevel(lvl, w, h,
+          chapter: app.chapter, curDay: app.curDay, scale: scale);
     }
     nodes = l.nodes;
     edges = l.edges;
@@ -249,8 +262,8 @@ class PlayState extends ChangeNotifier {
     for (var i = 0; i < ntype.length; i++) {
       if (ntype[i] != 6 || i == dragIdx) continue;
       nodes[i] = [
-        (nodes[i][0] + rnd.nextDouble() * 10 - 5).clamp(kNodeR, w - kNodeR),
-        (nodes[i][1] + rnd.nextDouble() * 10 - 5).clamp(kNodeR, h - kNodeR),
+        (nodes[i][0] + rnd.nextDouble() * 10 - 5).clamp(r, w - r),
+        (nodes[i][1] + rnd.nextDouble() * 10 - 5).clamp(r, h - r),
       ];
       moved = true;
     }
@@ -325,12 +338,12 @@ class PlayState extends ChangeNotifier {
       ny = nodes[dragIdx][1] - (ny - nodes[dragIdx][1]);
     }
     final ox = nodes[dragIdx][0], oy = nodes[dragIdx][1];
-    nodes[dragIdx] = [nx.clamp(kNodeR, w - kNodeR), ny.clamp(kNodeR, h - kNodeR)];
+    nodes[dragIdx] = [nx.clamp(r, w - r), ny.clamp(r, h - r)];
     final tw = twin[dragIdx];
     if (tw != null) {
       nodes[tw] = [
-        (nodes[tw][0] + (nodes[dragIdx][0] - ox)).clamp(kNodeR, w - kNodeR),
-        (nodes[tw][1] + (nodes[dragIdx][1] - oy)).clamp(kNodeR, h - kNodeR),
+        (nodes[tw][0] + (nodes[dragIdx][0] - ox)).clamp(r, w - r),
+        (nodes[tw][1] + (nodes[dragIdx][1] - oy)).clamp(r, h - r),
       ];
     }
     _recount();
@@ -353,7 +366,7 @@ class PlayState extends ChangeNotifier {
       }
     }
     final wet = bi >= 0 && bi != from && _inZone(sockets[bi]);
-    if (bi < 0 || bd > kNodeR * 4.2) bi = from;
+    if (bi < 0 || bd > r * 4.2) bi = from;
     nodes[i] = [sockets[bi][0], sockets[bi][1]];
     final tw = twin[i];
     if (tw != null) {
@@ -367,7 +380,7 @@ class PlayState extends ChangeNotifier {
           bj = k3;
         }
       }
-      if (bj >= 0 && bjd <= kNodeR * 4.2) {
+      if (bj >= 0 && bjd <= r * 4.2) {
         slotOf[tw] = bj;
         nodes[tw] = [sockets[bj][0], sockets[bj][1]];
       } else {

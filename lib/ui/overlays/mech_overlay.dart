@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/palette.dart';
 import '../../state/app_state.dart';
 import '../../state/play_state.dart';
+import '../layout.dart';
 import '../widgets/common.dart';
 
 /// Карточка новой механики перед стартом уровня (ovMech).
@@ -59,7 +60,7 @@ class _MechOverlayState extends State<MechOverlay>
       padding: const EdgeInsets.all(26),
       child: SingleChildScrollView(
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 340),
+          constraints: BoxConstraints(maxWidth: Layout.of(context).overlayMaxWidth),
           padding: const EdgeInsets.fromLTRB(26, 30, 26, 28),
           decoration: BoxDecoration(
             color: Pal.ovCard,

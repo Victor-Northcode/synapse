@@ -4,6 +4,7 @@ import 'package:games_services/games_services.dart';
 import '../../core/leaderboard.dart';
 import '../../core/palette.dart';
 import '../../state/app_state.dart';
+import '../layout.dart';
 import '../widgets/common.dart';
 
 /// Топ операторов: за неделю и за всё время.
@@ -79,7 +80,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     return Container(
       decoration: const BoxDecoration(gradient: Pal.fieldGradient),
       child: SafeArea(
-        child: Column(children: [
+        child: ContentColumn(
+          child: Column(children: [
           // Шапка: назад · титул · системная таблица.
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
@@ -139,6 +141,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           Expanded(child: _body(app)),
           if (state == _LbState.ready && me != null) _meRow(app),
         ]),
+        ),
       ),
     );
   }

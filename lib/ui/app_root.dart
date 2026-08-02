@@ -20,6 +20,7 @@ import 'screens/hub_screen.dart';
 import 'screens/leaderboard_screen.dart';
 import 'screens/play_screen.dart';
 import 'screens/settings_screen.dart';
+import 'layout.dart';
 import 'widgets/common.dart';
 
 /// Корень интерфейса: экраны, слои и оверлеи — как Stack из index.html.
@@ -132,9 +133,19 @@ class _AppRootState extends State<AppRoot> {
   }
 
   void _startLevel(int lvl) {
-    final size = MediaQuery.of(context).size;
-    final w = (size.width - 56).clamp(200.0, 900.0);
-    final h = (size.height - 330).clamp(260.0, 1200.0);
+    // Стартовый размер поля — прикидка под текущую раскладку; точный
+    // размер приходит из FieldWidget первым же кадром (resize).
+    final l = Layout.of(context);
+    final size = l.size;
+    final double w, h;
+    if (l.twoColumn) {
+      final side = (size.height - 40).clamp(260.0, 900.0);
+      w = side * 1.15;
+      h = side;
+    } else {
+      w = (size.width - 56).clamp(200.0, 900.0);
+      h = (size.height - 330).clamp(260.0, 1200.0);
+    }
     final p = PlayState(app, w, h);
     p.onToast = _toast;
     p.onWin = () => setState(() => showResult = true);
@@ -243,7 +254,9 @@ class _AppRootState extends State<AppRoot> {
             // Базовый слой: шапка + хаб/настройки.
             SafeArea(
               child: Column(children: [
-                _topBar(app),
+                ContentColumn(
+                    maxWidth: Layout.of(context).twoColumn ? 1100 : null,
+                    child: _topBar(app)),
                 Expanded(
                   child: settings
                       ? SettingsScreen(
@@ -344,12 +357,16 @@ class _AppRootState extends State<AppRoot> {
               Positioned(
                 left: 16,
                 right: 16,
+                // На широком экране плашка во всю ширину выглядит
+                // растянутой — центрируем и ограничиваем.
                 top: toastOnField ? null : MediaQuery.of(context).padding.top + 64,
                 bottom: toastOnField
                     ? MediaQuery.of(context).padding.bottom + 92
                     : null,
                 child: IgnorePointer(
-                  child: TweenAnimationBuilder<double>(
+                  child: ContentColumn(
+                    maxWidth: 460,
+                    child: TweenAnimationBuilder<double>(
                     key: ValueKey(toastText),
                     tween: Tween(begin: 0, end: 1),
                     duration: const Duration(milliseconds: 220),
@@ -377,6 +394,7 @@ class _AppRootState extends State<AppRoot> {
                               fontSize: 12,
                               height: 1.5,
                               color: Pal.text)),
+                    ),
                     ),
                   ),
                 ),

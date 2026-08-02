@@ -4,6 +4,7 @@ import '../../core/ads.dart';
 import '../../core/palette.dart';
 import '../../state/app_state.dart';
 import '../../state/play_state.dart';
+import '../layout.dart';
 import '../widgets/common.dart';
 
 /// Экран результата уровня (победа / перегрузка).
@@ -66,7 +67,7 @@ class _ResultOverlayState extends State<ResultOverlay> {
       padding: const EdgeInsets.all(26),
       child: SingleChildScrollView(
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 340),
+          constraints: BoxConstraints(maxWidth: Layout.of(context).overlayMaxWidth),
           padding: const EdgeInsets.fromLTRB(26, 30, 26, 28),
           decoration: BoxDecoration(
             color: Pal.ovCard,

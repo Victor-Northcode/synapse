@@ -98,12 +98,16 @@ class Level {
 ///
 /// [w]/[h] — размер поля, [chapter] и [curDay] задают темп появления
 /// протечек, бомб и мостов, как в исходнике.
-Level generateLevel(int level, double w, double h, {required int chapter, required int curDay}) {
+Level generateLevel(int level, double w, double h,
+    {required int chapter, required int curDay, double scale = 1.0}) {
   final rnd = math.Random();
   double r() => rnd.nextDouble();
 
   final sp = spec(level);
-  final pad = kNodeR + 14;
+  // На планшете узлы и зазоры крупнее ровно во столько же раз, во
+  // сколько крупнее поле — иначе разъёмы выглядят россыпью точек.
+  final nodeR = kNodeR * scale;
+  final pad = nodeR + 14 * scale;
 
   // Раскладка-решение: узлы без пересечений.
   final sol = <Pt>[];
@@ -113,7 +117,7 @@ Level generateLevel(int level, double w, double h, {required int chapter, requir
     final p = [pad + r() * (w - 2 * pad), pad + r() * (h - 2 * pad)];
     var ok = true;
     for (final q in sol) {
-      if (dist(p, q) < kNodeR * 2.6) {
+      if (dist(p, q) < nodeR * 2.6) {
         ok = false;
         break;
       }
@@ -233,7 +237,7 @@ Level generateLevel(int level, double w, double h, {required int chapter, requir
     do {
       c = [pad + r() * (w - 2 * pad), pad + r() * (h - 2 * pad)];
       g++;
-    } while (g < 60 && sockets.any((q) => dist(q, c) < kNodeR * 2.6));
+    } while (g < 60 && sockets.any((q) => dist(q, c) < nodeR * 2.6));
     sockets.add(c);
   }
 
@@ -279,15 +283,15 @@ Level generateLevel(int level, double w, double h, {required int chapter, requir
         bestF = q1;
       }
     }
-    if (bestF >= 0 && bestDist > kNodeR * 3.2) pickIdx = bestF;
+    if (bestF >= 0 && bestDist > nodeR * 3.2) pickIdx = bestF;
   }
   if (ch >= 2 && level > 3) {
     for (var z = 0; z < 1 + (ch >= 3 ? 1 : 0); z++) {
       zones.add(Zone(
-        pad + r() * (w - 2 * pad - 90),
-        pad + r() * (h - 2 * pad - 90),
-        70 + r() * 50,
-        60 + r() * 50,
+        pad + r() * (w - 2 * pad - 90 * scale),
+        pad + r() * (h - 2 * pad - 90 * scale),
+        (70 + r() * 50) * scale,
+        (60 + r() * 50) * scale,
       ));
     }
   }
