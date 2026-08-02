@@ -1,0 +1,43 @@
+# Сборка iOS .ipa на облачном Mac-раннере GitHub Actions.
+# Apple позволяет компилировать iOS-приложения только на macOS,
+# поэтому «сборка IPA с Windows» всегда означает вот это:
+# код уезжает на Mac-сервер, там собирается и возвращается артефактом.
+#
+# IPA собирается БЕЗ подписи (--no-codesign): для установки через
+# Sideloadly/AltStore этого достаточно, для TestFlight/App Store
+# нужно добавить сертификат разработчика Apple в секреты репозитория.
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.6
+          cache: true
+
+      - run: flutter pub get
+
+      - run: flutter build ios --release --no-codesign
+
+      - name: Pack IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry SYNAPSE-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SYNAPSE-ipa
+          path: SYNAPSE-unsigned.ipa
+          retention-days: 30

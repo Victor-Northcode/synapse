@@ -1,0 +1,58 @@
+name: synapse
+description: "SYNAPSE — neon puzzle about untangling the links of a damaged AI."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.2
+  shared_preferences: ^2.3.2
+  audioplayers: ^6.1.0
+  google_mobile_ads: ^9.0.0
+  flutter_local_notifications: ^19.0.0
+  timezone: ^0.10.1
+  flutter_svg: ^2.0.10
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.1
+
+flutter:
+  uses-material-design: true
+
+  fonts:
+    - family: Unbounded
+      fonts:
+        - asset: assets/fonts/Unbounded-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Unbounded-Black.ttf
+          weight: 900
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon/icon.png
+  adaptive_icon_background: "#04060E"
+  adaptive_icon_foreground: assets/icon/icon-foreground.png
+
+flutter_native_splash:
+  color: "#04060E"
+  image: assets/icon/icon-foreground.png
+  android_gravity: center
+  fullscreen: true
+  android_12:
+    color: "#04060E"
+    image: assets/icon/icon-foreground.png
