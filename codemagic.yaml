@@ -15,8 +15,12 @@ workflows:
       app_store_connect: synapse_asc
     environment:
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.synapse.link
+        # Ручная подпись: файлы загружены в Codemagic → Code signing
+        # identities под этими reference-именами.
+        certificates:
+          - synapse_dist
+        provisioning_profiles:
+          - synapse_appstore
       vars:
         APP_STORE_APPLE_ID: 6797268513
       flutter: stable
