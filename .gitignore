@@ -48,5 +48,5 @@ app.*.map.json
 android/build/
 android/app/build/
 
-# ¬итринные скриншоты стора Ч генерируютс€, финальные лежат в out/appstore
+# Generated store screenshots (final ones live in out/appstore)
 test/goldens/store/
