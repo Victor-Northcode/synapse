@@ -56,6 +56,7 @@ class _AppRootState extends State<AppRoot> {
   @override
   void dispose() {
     _toastTimer?.cancel();
+    play?.dispose();
     super.dispose();
   }
 
