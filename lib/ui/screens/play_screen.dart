@@ -28,15 +28,18 @@ class PlayScreen extends StatefulWidget {
 }
 
 class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateMixin {
-  late final AnimationController _hand =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
-        ..repeat();
+  // Создаётся в initState, а не лениво: ленивый контроллер мог впервые
+  // инициализироваться в dispose() и падать на поиске vsync.
+  late final AnimationController _hand;
   bool _boomShake = false;
   bool _adBusy = false;
 
   @override
   void initState() {
     super.initState();
+    _hand = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1600))
+      ..repeat();
     widget.play.addListener(_onPlay);
   }
 

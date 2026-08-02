@@ -36,6 +36,7 @@ class _AppRootState extends State<AppRoot> {
   bool showLb = false;
   PlayState? play;
   bool showResult = false;
+  bool _cardVisible = false;
   StoryMode? storyMode;
   int storyDay = 0;
   bool showPrivacy = false;
@@ -114,10 +115,19 @@ class _AppRootState extends State<AppRoot> {
   }
 
   // ---------- уровень ----------
+  /// Карточка механики живёт в PlayState — корень обязан узнавать о её
+  /// появлении и закрытии сам, а не ждать чужой перерисовки (иначе
+  /// «ПОНЯТНО» срабатывала «иногда»).
+  void _syncCard() {
+    final v = play?.pendingCard != null;
+    if (v != _cardVisible && mounted) setState(() => _cardVisible = v);
+  }
+
   /// Старый PlayState хороним только после кадра: виджеты поля ещё
   /// подписаны на него до перестройки дерева.
   void _retire(PlayState? old) {
     if (old == null) return;
+    old.removeListener(_syncCard);
     WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
   }
 
@@ -129,6 +139,7 @@ class _AppRootState extends State<AppRoot> {
     p.onToast = _toast;
     p.onWin = () => setState(() => showResult = true);
     p.onBoom = () => setState(() => showResult = true);
+    p.addListener(_syncCard);
     final old = play;
     setState(() {
       play = p;
@@ -136,6 +147,7 @@ class _AppRootState extends State<AppRoot> {
     });
     _retire(old);
     p.start(lvl);
+    _cardVisible = p.pendingCard != null;
   }
 
   void _quitToHub() {
@@ -267,6 +279,7 @@ class _AppRootState extends State<AppRoot> {
                     onOk: () {
                       p.dismissCard();
                       _flushToast();
+                      _syncCard(); // закрываем немедленно, не ждём слушателя
                     },
                   ),
                 ),
