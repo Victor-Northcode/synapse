@@ -199,9 +199,29 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
       ],
     );
     if (stacked) {
-      return Column(children: [title, const SizedBox(height: 14), counter]);
+      return Column(children: [
+        FittedBox(fit: BoxFit.scaleDown, child: title),
+        const SizedBox(height: 14),
+        counter,
+      ]);
     }
-    return Row(children: [title, const Spacer(), counter]);
+    // Узкий экран + длинный язык: обе половины ужимаются, ничего не
+    // режется, но счётчик остаётся прижат к правому краю.
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Flexible(
+        child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerStart,
+            child: title),
+      ),
+      const SizedBox(width: 8),
+      Flexible(
+        child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerEnd,
+            child: counter),
+      ),
+    ]);
   }
 
   Widget _movesRow(AppState app, PlayState play) {
@@ -377,6 +397,7 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
     // Кнопка остаётся живой даже «пустой»: тап объясняет тостом, чего
     // не хватает, долгое нажатие — что бустер делает.
     return Expanded(
+      flex: 4,
       child: GestureDetector(
         onLongPress: () =>
             widget.onInfo('${app.tl('bn')[bi]} — ${app.tl('bd')[bi]}'),
@@ -412,9 +433,13 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
         onLongPress: () => widget.onInfo(app.t('hintBuyD')),
         child: _mini(
           onTap: () => play.useHint(),
-          child: IconText(app.t('hint').replaceAll('{n}', '${app.hintStock}'),
-              style:
-                  const TextStyle(fontFamily: Fonts.mono, fontSize: 10, color: Pal.text)),
+          // «Hinweis 2» и подобные длинные подписи ужимаются, а не режутся.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: IconText(app.t('hint').replaceAll('{n}', '${app.hintStock}'),
+                style: const TextStyle(
+                    fontFamily: Fonts.mono, fontSize: 10, color: Pal.text)),
+          ),
         ),
       );
     }

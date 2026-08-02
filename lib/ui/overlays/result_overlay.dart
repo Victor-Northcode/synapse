@@ -110,7 +110,11 @@ class _ResultOverlayState extends State<ResultOverlay> {
             ),
             if (win) ...[
               const SizedBox(height: 16),
-              Row(mainAxisAlignment: MainAxisAlignment.center,
+              // На узком экране (сложенный Fold) строка награды должна
+              // сжиматься, а не резаться.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text('+${r.got}',
@@ -131,6 +135,7 @@ class _ResultOverlayState extends State<ResultOverlay> {
                       const ShardIcon(size: 15, color: Pal.cyan),
                     ],
                   ]),
+              ),
             ],
             const SizedBox(height: 18),
             PillButton(

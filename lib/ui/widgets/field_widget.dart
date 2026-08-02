@@ -186,6 +186,14 @@ class _FieldWidgetState extends State<FieldWidget> with SingleTickerProviderStat
             animation: Listenable.merge([play, _tick]),
             builder: (context, _) {
               _stepParticles();
+              // В покое (нет перетаскивания, искр и вспышек) поле живёт
+              // медленной пылью — там хватает 30 кадров в секунду, и
+              // телефон не греется на ровном месте.
+              final busy = _dragging ||
+                  _particles.isNotEmpty ||
+                  _snapRings.isNotEmpty ||
+                  _edgeFlash.isNotEmpty;
+              final stamp = busy ? _now : (_now ~/ 33) * 33;
               return CustomPaint(
                 size: Size(w, h),
                 isComplex: true,
@@ -193,7 +201,7 @@ class _FieldWidgetState extends State<FieldWidget> with SingleTickerProviderStat
                 painter: _FieldPainter(
                   play: play,
                   mat: kCableMats[widget.themeIndex],
-                  now: _now,
+                  now: stamp,
                   buildTime: _buildTime,
                   particles: _particles,
                   snapRings: _snapRings,
@@ -411,9 +419,11 @@ class _FieldPainter extends CustomPainter {
     }
 
     // Тень — в экранных координатах, свет сверху-слева.
-    final shadow = stroke(CableW.shadow * k * m, Color.fromRGBO(0, 0, 0, .4 * opacity))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
-    canvas.drawPath(path.shift(Offset(3 * g, 6 * g)), shadow);
+    // Размытие здесь стоило ~0.5 мс на кабель (32 свёртки на кадр);
+    // два полупрозрачных штриха разной толщины дают ту же мягкость
+    // почти бесплатно.
+    canvas.drawPath(path.shift(Offset(3 * g, 6 * g)),
+        stroke(CableW.shadow * k * m, Color.fromRGBO(0, 0, 0, .38 * opacity)));
 
     final dashPat = dash ? const [15.0, 10.0] : null;
     drawLayer(CableW.base * k * m,
@@ -557,13 +567,17 @@ class _FieldPainter extends CustomPainter {
             Paint()..color = ring..style = PaintingStyle.stroke..strokeWidth = ringW);
       }
 
-      // Тень.
+      // Тень: радиальный градиент вместо размытия — тот же мягкий край,
+      // но без свёртки на каждый узел.
+      final shadowRect = Rect.fromCircle(center: Offset(0, 5 * g), radius: 27 * g);
       canvas.drawCircle(
           Offset(0, 5 * g),
-          20 * g,
+          27 * g,
           Paint()
-            ..color = const Color(0x9E000000)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+            ..shader = const RadialGradient(
+              colors: [Color(0x9E000000), Color(0x66000000), Color(0x00000000)],
+              stops: [0, .62, 1],
+            ).createShader(shadowRect));
 
       // Металлический фланец.
       final flange = Paint()
@@ -598,9 +612,19 @@ class _FieldPainter extends CustomPainter {
           colors: [coreHi, coreMid, coreLo],
           stops: const [0, .38, 1],
         ).createShader(Rect.fromCircle(center: Offset.zero, radius: 9 * g));
-      // Свечение ядра.
-      canvas.drawCircle(Offset.zero, 9 * g,
-          Paint()..color = coreMid.withValues(alpha: .5)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+      // Свечение ядра — тоже градиентом, а не размытием.
+      canvas.drawCircle(
+          Offset.zero,
+          16 * g,
+          Paint()
+            ..shader = RadialGradient(
+              colors: [
+                coreMid.withValues(alpha: .55),
+                coreMid.withValues(alpha: .22),
+                coreMid.withValues(alpha: 0),
+              ],
+              stops: const [.35, .62, 1],
+            ).createShader(Rect.fromCircle(center: Offset.zero, radius: 16 * g)));
       canvas.drawCircle(Offset.zero, 9 * g, core);
 
       canvas.restore();
@@ -682,5 +706,6 @@ class _FieldPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _FieldPainter old) => true;
+  bool shouldRepaint(covariant _FieldPainter old) =>
+      old.now != now || old.play != play || old.mat != mat || old.boomTint != boomTint;
 }

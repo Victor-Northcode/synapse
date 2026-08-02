@@ -327,20 +327,28 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   color: mine ? Pal.cyan : Pal.text)),
         ),
         const SizedBox(width: 10),
-        Text.rich(
-          TextSpan(children: [
-            TextSpan(
-                text: '${r.rawScore}',
-                style: TextStyle(
-                    fontFamily: Fonts.disp,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: medal ?? Pal.cyan)),
-            TextSpan(
-                text: ' ${widget.app.lt('lbScore')}',
-                style: const TextStyle(
-                    fontFamily: Fonts.mono, fontSize: 8.5, color: Pal.faint)),
-          ]),
+        // «Verbindungen» на узком экране длиннее самой строки — счёт
+        // ужимается, но никогда не режется.
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerEnd,
+            child: Text.rich(
+              TextSpan(children: [
+                TextSpan(
+                    text: '${r.rawScore}',
+                    style: TextStyle(
+                        fontFamily: Fonts.disp,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: medal ?? Pal.cyan)),
+                TextSpan(
+                    text: ' ${widget.app.lt('lbScore')}',
+                    style: const TextStyle(
+                        fontFamily: Fonts.mono, fontSize: 8.5, color: Pal.faint)),
+              ]),
+            ),
+          ),
         ),
       ]),
     );
