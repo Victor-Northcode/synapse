@@ -240,62 +240,77 @@ class _AppRootState extends State<AppRoot> {
             ),
 
             // Игровой слой.
-            if (p != null) Positioned.fill(
-              child: PlayScreen(play: p, onQuit: _quitToHub, onHintAd: _hintViaAd),
-            ),
+            if (p != null)
+              Positioned.fill(
+                child: SlideUpIn(
+                  key: ValueKey(p),
+                  child: PlayScreen(
+                      play: p, onQuit: _quitToHub, onHintAd: _hintViaAd, onInfo: _toast),
+                ),
+              ),
 
             // Карточка механики.
             if (p != null && p.pendingCard != null)
               Positioned.fill(
-                child: MechOverlay(
-                  app: app,
-                  card: p.pendingCard!,
-                  maxBridges: p.maxBridges,
-                  onOk: () {
-                    p.dismissCard();
-                    _flushToast();
-                  },
+                child: PopIn(
+                  child: MechOverlay(
+                    app: app,
+                    card: p.pendingCard!,
+                    maxBridges: p.maxBridges,
+                    onOk: () {
+                      p.dismissCard();
+                      _flushToast();
+                    },
+                  ),
                 ),
               ),
 
             // Результат.
             if (p != null && showResult && p.result != null)
               Positioned.fill(
-                child: ResultOverlay(
-                  app: app,
-                  result: p.result!,
-                  onToast: _toast,
-                  onNext: () => _startLevel(p.result!.win ? app.level : p.result!.level),
-                  onHub: _quitToHub,
-                  onContinue: () {
-                    setState(() => showResult = false);
-                    p.continueAfterAd();
-                  },
+                child: PopIn(
+                  key: ValueKey(p.result),
+                  child: ResultOverlay(
+                    app: app,
+                    result: p.result!,
+                    onToast: _toast,
+                    onNext: () => _startLevel(p.result!.win ? app.level : p.result!.level),
+                    onHub: _quitToHub,
+                    onContinue: () {
+                      setState(() => showResult = false);
+                      p.continueAfterAd();
+                    },
+                  ),
                 ),
               ),
 
             // Сюжет.
             if (storyMode != null)
               Positioned.fill(
-                child: StoryOverlay(
-                  app: app,
-                  mode: storyMode!,
-                  day: storyDay,
-                  onDone: _closeStory,
+                child: PopIn(
+                  key: ValueKey(storyMode),
+                  child: StoryOverlay(
+                    app: app,
+                    mode: storyMode!,
+                    day: storyDay,
+                    onDone: _closeStory,
+                  ),
                 ),
               ),
 
             // Политика.
             if (showPrivacy)
               Positioned.fill(
-                child: PrivacyOverlay(
-                    app: app, onClose: () => setState(() => showPrivacy = false)),
+                child: PopIn(
+                  child: PrivacyOverlay(
+                      app: app, onClose: () => setState(() => showPrivacy = false)),
+                ),
               ),
 
             // Загрузка.
             if (booting) Positioned.fill(child: BootScreen(onDone: _bootDone)),
 
-            // Тост.
+            // Тост: всплывает с лёгким сдвигом.
             if (toastText != null)
               Positioned(
                 left: 16,
@@ -305,20 +320,35 @@ class _AppRootState extends State<AppRoot> {
                     ? MediaQuery.of(context).padding.bottom + 92
                     : null,
                 child: IgnorePointer(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-                    decoration: BoxDecoration(
-                      color: Pal.panel,
-                      border: Border.all(color: Pal.yellow),
-                      borderRadius: BorderRadius.circular(10),
+                  child: TweenAnimationBuilder<double>(
+                    key: ValueKey(toastText),
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, v, child) => Opacity(
+                      opacity: v,
+                      child: Transform.translate(
+                          offset: Offset(0, (toastOnField ? 10 : -10) * (1 - v)),
+                          child: child),
                     ),
-                    child: IconText(toastText!,
-                        align: TextAlign.start,
-                        style: const TextStyle(
-                            fontFamily: Fonts.mono,
-                            fontSize: 12,
-                            height: 1.5,
-                            color: Pal.text)),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+                      decoration: BoxDecoration(
+                        color: Pal.panel,
+                        border: Border.all(color: Pal.yellow),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0x66000000), blurRadius: 24, offset: Offset(0, 8)),
+                        ],
+                      ),
+                      child: IconText(toastText!,
+                          align: TextAlign.start,
+                          style: const TextStyle(
+                              fontFamily: Fonts.mono,
+                              fontSize: 12,
+                              height: 1.5,
+                              color: Pal.text)),
+                    ),
                   ),
                 ),
               ),

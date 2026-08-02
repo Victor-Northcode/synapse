@@ -280,14 +280,57 @@ class IconText extends StatelessWidget {
   }
 }
 
+/// Появление оверлея: мягкий наплыв с лёгким увеличением.
+class PopIn extends StatelessWidget {
+  final Widget child;
+  final Duration duration;
+  const PopIn({super.key, required this.child, this.duration = const Duration(milliseconds: 320)});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      child: child,
+      builder: (context, v, child) => Opacity(
+        opacity: v,
+        child: Transform.scale(scale: .94 + .06 * v, child: child),
+      ),
+    );
+  }
+}
+
+/// Появление экрана: выезд снизу с затуханием.
+class SlideUpIn extends StatelessWidget {
+  final Widget child;
+  const SlideUpIn({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 340),
+      curve: Curves.easeOutCubic,
+      child: child,
+      builder: (context, v, child) => Opacity(
+        opacity: v,
+        child: Transform.translate(offset: Offset(0, 26 * (1 - v)), child: child),
+      ),
+    );
+  }
+}
+
 /// Главная кнопка-пилюля (btn-primary): мадженто-заливка и неоновое гало.
-class PillButton extends StatelessWidget {
+/// [pulse] — гало «дышит», приглашая нажать.
+class PillButton extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final Color color;
   final Color textColor;
   final double minHeight;
   final double glow;
+  final bool pulse;
   const PillButton({
     super.key,
     required this.child,
@@ -296,35 +339,66 @@ class PillButton extends StatelessWidget {
     this.textColor = const Color(0xFF1A0512),
     this.minHeight = 88,
     this.glow = .45,
+    this.pulse = false,
   });
 
   @override
+  State<PillButton> createState() => _PillButtonState();
+}
+
+class _PillButtonState extends State<PillButton> with SingleTickerProviderStateMixin {
+  AnimationController? _c;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.pulse) {
+      _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))
+        ..repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Pressable(
-      onTap: onTap,
-      child: Container(
-        constraints: BoxConstraints(minHeight: minHeight),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: [
-            BoxShadow(color: color.withValues(alpha: glow), blurRadius: 52, spreadRadius: 0),
-          ],
-        ),
-        child: DefaultTextStyle(
-          style: TextStyle(
-            fontFamily: Fonts.disp,
-            fontWeight: FontWeight.w700,
-            fontSize: 19,
-            letterSpacing: 2.4,
-            color: textColor,
+    Widget body(double k) => Container(
+          constraints: BoxConstraints(minHeight: widget.minHeight),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          decoration: BoxDecoration(
+            color: widget.color,
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: [
+              BoxShadow(
+                  color: widget.color.withValues(alpha: widget.glow * (0.75 + .45 * k)),
+                  blurRadius: 44 + 22 * k),
+            ],
           ),
-          textAlign: TextAlign.center,
-          child: child,
-        ),
-      ),
+          child: DefaultTextStyle(
+            style: TextStyle(
+              fontFamily: Fonts.disp,
+              fontWeight: FontWeight.w700,
+              fontSize: 19,
+              letterSpacing: 2.4,
+              color: widget.textColor,
+            ),
+            textAlign: TextAlign.center,
+            child: widget.child,
+          ),
+        );
+    return Pressable(
+      onTap: widget.onTap,
+      child: _c == null
+          ? body(0.5)
+          : AnimatedBuilder(
+              animation: _c!,
+              builder: (context, _) => body(Curves.easeInOut.transform(_c!.value)),
+            ),
     );
   }
 }

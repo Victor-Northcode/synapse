@@ -15,8 +15,13 @@ class PlayScreen extends StatefulWidget {
   final PlayState play;
   final VoidCallback onQuit;
   final Future<void> Function() onHintAd; // подсказка за ролик
+  final void Function(String) onInfo; // тост-пояснение
   const PlayScreen(
-      {super.key, required this.play, required this.onQuit, required this.onHintAd});
+      {super.key,
+      required this.play,
+      required this.onQuit,
+      required this.onHintAd,
+      required this.onInfo});
 
   @override
   State<PlayScreen> createState() => _PlayScreenState();
@@ -300,23 +305,31 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
   Widget _boost(AppState app, PlayState play, int bi, String key) {
     final count = app.inv[key] ?? 0;
     final noTarget = count > 0 && play.alive && !play.boostHasTarget(key);
-    final disabled = count <= 0 || !play.alive || noTarget;
+    final dimmed = count <= 0 || !play.alive || noTarget;
     const icons = ['cut', 'timer', 'target'];
+    // Кнопка остаётся живой даже «пустой»: тап объясняет тостом, чего
+    // не хватает, долгое нажатие — что бустер делает.
     return Expanded(
       flex: 4,
-      child: _mini(
-        disabled: disabled,
-        onTap: () => play.useBoost(key),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          GameIcon(icons[bi], size: 14, color: Pal.text),
-          const SizedBox(width: 4),
-          Text('$count',
-              style: const TextStyle(
-                  fontFamily: Fonts.mono,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Pal.cyan)),
-        ]),
+      child: GestureDetector(
+        onLongPress: () =>
+            widget.onInfo('${app.tl('bn')[bi]} — ${app.tl('bd')[bi]}'),
+        child: Opacity(
+          opacity: dimmed ? .45 : 1,
+          child: _mini(
+            onTap: () => play.useBoost(key),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              GameIcon(icons[bi], size: 14, color: Pal.text),
+              const SizedBox(width: 4),
+              Text('$count',
+                  style: const TextStyle(
+                      fontFamily: Fonts.mono,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Pal.cyan)),
+            ]),
+          ),
+        ),
       ),
     );
   }
@@ -324,25 +337,33 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
   Widget _hintBtn(AppState app, PlayState play) {
     final hasStock = app.hintStock > 0;
     if (hasStock) {
-      return _mini(
-        onTap: () => play.useHint(),
-        child: IconText(app.t('hint').replaceAll('{n}', '${app.hintStock}'),
-            style: const TextStyle(fontFamily: Fonts.mono, fontSize: 10, color: Pal.text)),
+      return GestureDetector(
+        onLongPress: () => widget.onInfo(app.t('hintBuyD')),
+        child: _mini(
+          onTap: () => play.useHint(),
+          child: IconText(app.t('hint').replaceAll('{n}', '${app.hintStock}'),
+              style:
+                  const TextStyle(fontFamily: Fonts.mono, fontSize: 10, color: Pal.text)),
+        ),
       );
     }
-    return _mini(
-      border: Pal.yellow,
-      disabled: _adBusy,
-      onTap: () async {
-        setState(() => _adBusy = true);
-        await widget.onHintAd();
-        if (mounted) setState(() => _adBusy = false);
-      },
-      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
-        GameIcon('tv', size: 14, color: Pal.yellow),
-        SizedBox(width: 3),
-        GameIcon('bulb', size: 14, color: Pal.yellow),
-      ]),
+    // Подсказки кончились — предлагаем ролик; долгое нажатие поясняет.
+    return GestureDetector(
+      onLongPress: () => widget.onInfo(app.t('hintAd')),
+      child: _mini(
+        border: Pal.yellow,
+        disabled: _adBusy,
+        onTap: () async {
+          setState(() => _adBusy = true);
+          await widget.onHintAd();
+          if (mounted) setState(() => _adBusy = false);
+        },
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
+          GameIcon('tv', size: 14, color: Pal.yellow),
+          SizedBox(width: 3),
+          GameIcon('bulb', size: 14, color: Pal.yellow),
+        ]),
+      ),
     );
   }
 }

@@ -89,6 +89,22 @@ class _FieldWidgetState extends State<FieldWidget> with SingleTickerProviderStat
         _spawnParticles();
       case PlayFx.flashRed:
         _boomTint = true;
+      case PlayFx.win:
+        _spawnWinBurst();
+    }
+  }
+
+  /// Салют победы: искры взлетают из каждого узла вверх.
+  void _spawnWinBurst() {
+    final rnd = math.Random();
+    const colors = [Pal.green, Pal.cyan, Pal.yellow, Color(0xFFE8CE7A)];
+    for (final p in widget.play.nodes) {
+      for (var i = 0; i < 12; i++) {
+        final an = -math.pi / 2 + (rnd.nextDouble() - .5) * 1.6;
+        final sp = 2.5 + rnd.nextDouble() * 5;
+        _particles.add(_Particle(
+            p[0], p[1], math.cos(an) * sp, math.sin(an) * sp, colors[rnd.nextInt(4)]));
+      }
     }
   }
 
@@ -229,6 +245,7 @@ class _FieldPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    _paintDust(canvas, size);
     _paintZones(canvas);
     _paintSockets(canvas);
     _paintCables(canvas);
@@ -237,6 +254,22 @@ class _FieldPainter extends CustomPainter {
     _paintNodes(canvas);
     _paintSnapRings(canvas);
     _paintParticles(canvas);
+  }
+
+  /// Живой фон: медленно дрейфующие пылинки-светлячки.
+  void _paintDust(Canvas canvas, Size size) {
+    final t = now / 1000.0;
+    for (var i = 0; i < 16; i++) {
+      final seed = i * 37.7;
+      final x = size.width * (0.5 + 0.46 * math.sin(seed * 1.7 + t * (0.05 + i % 5 * 0.012)));
+      final y = size.height * (0.5 + 0.44 * math.cos(seed * 2.3 + t * (0.04 + i % 7 * 0.01)));
+      final tw = 0.5 + 0.5 * math.sin(t * (0.6 + i % 3 * 0.3) + seed);
+      canvas.drawCircle(
+        Offset(x, y),
+        1.0 + (i % 3) * 0.6,
+        Paint()..color = const Color(0xFF7CE0FF).withValues(alpha: 0.04 + 0.07 * tw),
+      );
+    }
   }
 
   // Протечка: мягкое синее пятно без границы.

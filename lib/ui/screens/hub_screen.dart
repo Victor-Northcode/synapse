@@ -33,7 +33,21 @@ class _HubScreenState extends State<HubScreen> {
           Expanded(child: _tabButton(app.t('tab2'), 1)),
         ]),
         const SizedBox(height: 14),
-        if (tab == 0) ..._pane0(app) else ..._pane1(app),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          switchInCurve: Curves.easeOutCubic,
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween(begin: const Offset(0, .03), end: Offset.zero).animate(anim),
+              child: child,
+            ),
+          ),
+          child: Column(
+            key: ValueKey(tab),
+            children: tab == 0 ? _pane0(app) : _pane1(app),
+          ),
+        ),
       ],
     );
   }
@@ -79,6 +93,7 @@ class _HubScreenState extends State<HubScreen> {
     return [
       PillButton(
         onTap: widget.onPlay,
+        pulse: true,
         color: btnColor,
         textColor: btnText,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -194,82 +209,112 @@ class _HubScreenState extends State<HubScreen> {
     required String name,
     required String desc,
     required String price,
+    VoidCallback? onAdTap,
   }) {
     return Pressable(
       onTap: onTap,
-      child: Opacity(
-        opacity: can ? 1 : .5,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(6, 14, 6, 12),
-          decoration: BoxDecoration(
-            color: const Color(0x0D78A0FF),
-            borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(6, 14, 6, 12),
+        decoration: BoxDecoration(
+          color: const Color(0x0D78A0FF),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Stack(children: [
+          Positioned(
+            right: 2,
+            top: -4,
+            child: Text(count,
+                style: const TextStyle(
+                    fontFamily: Fonts.disp,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                    color: Pal.cyan)),
           ),
-          child: Stack(children: [
-            Positioned(
-              right: 2,
-              top: -4,
-              child: Text(count,
-                  style: const TextStyle(
-                      fontFamily: Fonts.disp,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 10,
-                      color: Pal.cyan)),
-            ),
-            Column(children: [
-              icon,
-              const SizedBox(height: 8),
-              Text(name,
-                  maxLines: 1,
+          Column(children: [
+            Opacity(opacity: can ? 1 : .55, child: icon),
+            const SizedBox(height: 8),
+            Text(name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontFamily: Fonts.mono, fontSize: 10, color: Pal.text)),
+            const SizedBox(height: 3),
+            SizedBox(
+              height: 26,
+              child: Text(desc,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
-                      fontFamily: Fonts.mono, fontSize: 10, color: Pal.text)),
-              const SizedBox(height: 3),
-              SizedBox(
-                height: 26,
-                child: Text(desc,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontFamily: Fonts.mono, fontSize: 8, height: 1.3, color: Pal.faint)),
-              ),
-              const SizedBox(height: 6),
-              IconText(price,
+                      fontFamily: Fonts.mono, fontSize: 8, height: 1.3, color: Pal.faint)),
+            ),
+            const SizedBox(height: 6),
+            Opacity(
+              opacity: can ? 1 : .5,
+              child: IconText(price,
                   style: const TextStyle(
                       fontFamily: Fonts.disp,
                       fontWeight: FontWeight.w700,
                       fontSize: 11,
                       color: Pal.cyan)),
-            ]),
+            ),
+            // Не хватает осколков — предмет можно получить за ролик.
+            if (onAdTap != null) ...[
+              const SizedBox(height: 7),
+              Pressable(
+                onTap: onAdTap,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0x1CFFD400),
+                    border: Border.all(color: const Color(0x66FFD400)),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                    GameIcon('tv', size: 12, color: Pal.yellow),
+                    SizedBox(width: 4),
+                    Text('+1',
+                        style: TextStyle(
+                            fontFamily: Fonts.disp,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 10,
+                            color: Pal.yellow)),
+                  ]),
+                ),
+              ),
+            ],
           ]),
-        ),
+        ]),
       ),
     );
   }
 
   Widget _shopBooster(AppState app, int bi) {
     final b = kBoosters[bi];
+    final can = app.shards >= b.cost;
     return _shopCard(
-      can: app.shards >= b.cost,
+      can: can,
       onTap: () => app.buyBooster(bi),
       count: '${app.inv[b.key]}',
       icon: GameIcon(b.icon, size: 19, color: Pal.text),
       name: app.tl('bn')[bi],
       desc: app.tl('bd')[bi],
       price: '${b.cost}✦',
+      onAdTap: !can && app.canAdItem ? () => app.watchAdForItem(b.key) : null,
     );
   }
 
   Widget _shopHint(AppState app) {
+    final can = app.shards >= app.hintPrice();
     return _shopCard(
-      can: app.shards >= app.hintPrice(),
+      can: can,
       onTap: app.buyHint,
       count: '${app.hintStock}',
       icon: const GameIcon('bulb', size: 19, color: Pal.text),
       name: app.t('hintBuy'),
       desc: app.t('hintBuyD'),
       price: '${app.hintPrice()}✦',
+      onAdTap: !can && app.canAdItem ? () => app.watchAdForItem('hint') : null,
     );
   }
 

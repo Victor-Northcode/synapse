@@ -12,7 +12,7 @@ import '../game/level.dart';
 import 'app_state.dart';
 
 /// Разовые визуальные эффекты поля.
-enum PlayFx { snap, boom, flashRed }
+enum PlayFx { snap, boom, flashRed, win }
 
 class PlayFxEvent {
   final PlayFx fx;
@@ -653,8 +653,10 @@ class PlayState extends ChangeNotifier {
     result = LevelResult(true, got, (cleanRun ? 1 : 0) + (skillBonus ? 1 : 0), level,
         crossings, nodes.length, edges.length, spec(app.level).n);
     app.notify();
+    onFx?.call(const PlayFxEvent(PlayFx.win));
     notifyListeners();
-    onWin?.call();
+    // Пауза на салют: экран результата выходит после вспышки поля.
+    Future.delayed(const Duration(milliseconds: 750), () => onWin?.call());
   }
 
   void boom() {

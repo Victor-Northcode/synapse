@@ -47,6 +47,7 @@ class AppState extends ChangeNotifier {
   List<bool> gDone = [false, false, false];
   Map<String, int> inv = {'cut': 0, 'stab': 0, 'auto': 0};
   int adShards = 0;
+  int adItems = 0; // предметы за ролик, до 3 в день
   int theme = 0;
   List<int> owned = [1, 0, 0, 0];
   List<bool> done = [];
@@ -108,6 +109,7 @@ class AppState extends ChangeNotifier {
         };
       }
       adShards = (sv['ads'] as num?)?.toInt() ?? 0;
+      adItems = (sv['adb'] as num?)?.toInt() ?? 0;
       theme = ((sv['th'] as num?)?.toInt() ?? 0).clamp(0, kThemes.length - 1);
       if (sv['ow'] is List) {
         owned = [for (final v in sv['ow'] as List) (v as num).toInt()];
@@ -147,6 +149,7 @@ class AppState extends ChangeNotifier {
       'gd': gDone,
       'inv': inv,
       'ads': adShards,
+      'adb': adItems,
       'th': theme,
       'ow': owned,
       'ch': chapter,
@@ -262,6 +265,7 @@ class AppState extends ChangeNotifier {
     gp = [0, 0, 0];
     gDone = [false, false, false];
     adShards = 0;
+    adItems = 0;
     if (prev.isNotEmpty) {
       final y = DateTime.now().toUtc().subtract(const Duration(days: 1));
       final yk = '${y.year}-${y.month}-${y.day}';
@@ -410,6 +414,36 @@ class AppState extends ChangeNotifier {
     theme = ti;
     Haptics.instance.snap();
     save();
+    notifyListeners();
+  }
+
+  /// Предмет за ролик, когда осколков не хватает: бустер или подсказка.
+  /// До трёх предметов в день — тем же принципом, что и +2✦.
+  bool get canAdItem => adItems < 3 && Ads.instance.hasAds;
+
+  Future<void> watchAdForItem(String kind) async {
+    if (!canAdItem) return;
+    onEvent?.call(GameEvent(GameEventType.toast, text: t('adWatch')));
+    final ok = await Ads.instance.rewarded();
+    if (!ok) {
+      onEvent?.call(GameEvent(GameEventType.toast,
+          text: Ads.instance.hasAds ? t('adFail') : t('adOff')));
+      return;
+    }
+    adItems++;
+    String label;
+    if (kind == 'hint') {
+      hintStock++;
+      label = t('hintBought');
+    } else {
+      inv[kind] = (inv[kind] ?? 0) + 1;
+      final bi = kBoosters.indexWhere((b) => b.key == kind);
+      label = t('bBought').replaceAll('{n}', tl('bn')[bi]);
+    }
+    save();
+    onEvent?.call(GameEvent(GameEventType.toast, text: label));
+    GameAudio.instance.tone(1000, .12, 'sine', .06);
+    Haptics.instance.success();
     notifyListeners();
   }
 
