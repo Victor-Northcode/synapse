@@ -407,21 +407,32 @@ class _AppRootState extends State<AppRoot> {
         ]),
         const Spacer(),
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          Text('${app.free}',
-              style: const TextStyle(
-                  fontFamily: Fonts.disp,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  color: Pal.yellow)),
+          // Баланс досчитывается плавно — награда «дозвякивает» в шапке.
+          TweenAnimationBuilder<double>(
+            tween: Tween(end: app.free.toDouble()),
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOutCubic,
+            builder: (context, v, _) => Text('${v.round()}',
+                style: const TextStyle(
+                    fontFamily: Fonts.disp,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: Pal.yellow)),
+          ),
           const SizedBox(width: 2),
           const GameIcon('bolt', size: 15, solid: true, color: Pal.yellow),
           const SizedBox(width: 8),
-          Text('${app.shards}',
-              style: const TextStyle(
-                  fontFamily: Fonts.mono,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Pal.cyan)),
+          TweenAnimationBuilder<double>(
+            tween: Tween(end: app.shards.toDouble()),
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOutCubic,
+            builder: (context, v, _) => Text('${v.round()}',
+                style: const TextStyle(
+                    fontFamily: Fonts.mono,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Pal.cyan)),
+          ),
           const SizedBox(width: 2),
           const ShardIcon(size: 10, color: Pal.cyan),
         ]),
