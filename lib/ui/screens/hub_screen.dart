@@ -300,7 +300,7 @@ class _HubScreenState extends State<HubScreen> {
       name: app.tl('bn')[bi],
       desc: app.tl('bd')[bi],
       price: '${b.cost}✦',
-      onAdTap: !can && app.canAdItem ? () => app.watchAdForItem(b.key) : null,
+      onAdTap: !can && app.adOfferFor(b.key) ? () => app.watchAdForItem(b.key) : null,
     );
   }
 
@@ -314,7 +314,7 @@ class _HubScreenState extends State<HubScreen> {
       name: app.t('hintBuy'),
       desc: app.t('hintBuyD'),
       price: '${app.hintPrice()}✦',
-      onAdTap: !can && app.canAdItem ? () => app.watchAdForItem('hint') : null,
+      onAdTap: !can && app.adOfferFor('hint') ? () => app.watchAdForItem('hint') : null,
     );
   }
 

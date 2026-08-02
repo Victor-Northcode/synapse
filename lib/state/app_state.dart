@@ -421,6 +421,20 @@ class AppState extends ChangeNotifier {
   /// До трёх предметов в день — тем же принципом, что и +2✦.
   bool get canAdItem => adItems < 3 && Ads.instance.hasAds;
 
+  /// Предложение «за ролик» появляется РЕДКО: примерно у одного предмета
+  /// в день, состав меняется ежедневно. Детерминировано от даты, чтобы
+  /// кнопка не мигала между перерисовками и не исчезала в течение дня.
+  bool adOfferFor(String kind) {
+    if (!canAdItem) return false;
+    final idx = const ['cut', 'stab', 'auto', 'hint'].indexOf(kind);
+    if (idx < 0) return false;
+    var seed = 0;
+    for (final c in dayKey.codeUnits) {
+      seed = (seed * 31 + c) & 0x7FFFFFFF;
+    }
+    return hash32(seed + idx * 977 + 5) < 0.28;
+  }
+
   Future<void> watchAdForItem(String kind) async {
     if (!canAdItem) return;
     onEvent?.call(GameEvent(GameEventType.toast, text: t('adWatch')));
