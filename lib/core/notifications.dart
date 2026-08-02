@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -19,7 +20,7 @@ class Push {
   bool _askedOnce = false;
 
   Future<void> init() async {
-    if (_inited) return;
+    if (_inited || kIsWeb) return; // в браузере локальных уведомлений нет
     try {
       tzdata.initializeTimeZones();
       await _plugin.initialize(

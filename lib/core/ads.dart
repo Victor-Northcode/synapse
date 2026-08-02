@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 /// Реклама за награду — порт модуля NATIVE.
@@ -20,7 +21,8 @@ class Ads {
   };
   static const _realUnit = {'android': '', 'ios': ''};
 
-  bool get hasAds => Platform.isAndroid || Platform.isIOS;
+  // В вебе Platform недоступен и рекламного SDK нет — реклама выключена.
+  bool get hasAds => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
   bool get usingTestAds => _unit == _testUnit[_platform];
 
   String get _platform => Platform.isIOS ? 'ios' : 'android';
