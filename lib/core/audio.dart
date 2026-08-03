@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -24,10 +25,12 @@ class GameAudio {
   // ---- фоновая музыка ----
   // Гэплесс своими руками: платформенные лупы (и MediaPlayer, и SoundPool)
   // дают слышимую щель на стыке. Поэтому два плеера запускают один и тот
-  // же кусок по кругу с перекрытием: хвост записан с затуханием, голова —
+  // же трек по кругу с перекрытием: хвост записан с затуханием, голова —
   // с нарастанием, в перекрытии контент идентичен и суммируется в единицу.
-  static const _musicLoop = 20.0; // период запуска следующего круга, с
-  static const _musicXfade = 2.5; // перекрытие, с
+  // Трек длинный (2 м 40 с, живая структура), а кроссфейд широкий (6 с):
+  // даже секундная задержка старта второго плеера растворяется в нём.
+  static const _musicLoop = 160.0; // период запуска следующего круга, с
+  static const _musicXfade = 6.0; // перекрытие, с
   final List<AudioPlayer> _musicPair = [];
   int _musicNext = 0;
   Timer? _musicTimer;
@@ -105,7 +108,16 @@ class GameAudio {
           _musicPair.add(p);
         }
       }
-      _musicWav ??= _synthMusic();
+      // Синтез трека тяжёлый (~2.7 млн сэмплов) — уводим в изолят,
+      // чтобы интерфейс не дёргался; без изолята (веб) считаем на месте.
+      if (_musicWav == null) {
+        try {
+          _musicWav = await Isolate.run(_buildMusic);
+        } catch (_) {
+          _musicWav = _buildMusic();
+        }
+      }
+      if (!_musicOn) return; // выключили, пока считался трек
       _musicTimer?.cancel();
       await _musicPair[0].stop();
       await _musicPair[1].stop();
@@ -234,69 +246,136 @@ class GameAudio {
     return _wav(data);
   }
 
-  /// 20-секундная бесшовная петля эмбиента: четыре аккорда перетекают
-  /// по кругу (Am → F → C → G), поверх — тихая пентатоническая мелодия
-  /// колокольчиков и мягкий суб-бас. Все частоты кратны длине петли,
-  /// LFO — целое число циклов: стык математически бесшовный.
-  /// Частота 16 кГц: пэду выше 8 кГц ничего не нужно, а декодированный
-  /// буфер остаётся под лимитом SoundPool (гэплесс-луп на Android).
+  /// Частота музыки 16 кГц: пэду и плюкам выше 8 кГц ничего не нужно,
+  /// а буфер остаётся скромным.
   static const _musicRate = 16000;
 
-  Uint8List _synthMusic() {
+  /// Для тестов: собранный трек и его параметры.
+  static Uint8List debugBuildMusic() => _buildMusic();
+  static int get debugMusicRate => _musicRate;
+  static double get debugMusicLoop => _musicLoop;
+  static double get debugMusicXfade => _musicXfade;
+
+  /// Трек 160 секунд с живой структурой (статический — считается в
+  /// изоляте). Аккорды Am → F → C → G крутятся по 5 секунд весь трек,
+  /// а слои приходят и уходят, как в настоящем эмбиент-электро:
+  ///   0–40   пэд и редкие колокольчики — спокойное вступление
+  ///   40–80  + арпеджио-перебор с эхом
+  ///   80–120 + пульс суб-баса и тихие хэты — грув
+  ///   120–140 всё вместе — кульминация
+  ///   140–160 слои гаснут, остаётся пэд — петля замыкается в тишину
+  ///   вступления, поэтому повтор через 2 м 40 с не ощущается повтором.
+  /// Хвост файла (6 с) повторяет голову с линейным затуханием — при
+  /// наложении двух плееров стык суммируется в единицу.
+  static Uint8List _buildMusic() {
     const loop = _musicLoop;
     const xf = _musicXfade;
     final n = (_musicRate * (loop + xf)).round();
     final data = Float64List(n);
 
-    // Частота подгоняется к целому числу циклов на петлю — стык не щёлкает.
-    double snap(double f) => (f * loop).roundToDouble() / loop;
+    // Частота подгоняется к целому числу циклов на 20-секундный такт.
+    double snap(double f) => (f * 20).roundToDouble() / 20;
 
-    // Прогрессия Am → F → C → G, по 5 секунд на аккорд.
     final chords = [
       [110.0, 164.81, 220.0, 261.63, 329.63], // Am
       [87.31, 174.61, 220.0, 261.63, 349.23], // F
       [130.81, 196.0, 261.63, 329.63, 392.0], // C
       [98.0, 146.83, 246.94, 293.66, 392.0], // G
     ].map((c) => c.map(snap).toList()).toList();
-    const amps = [.4, .22, .2, .17, .1];
+    const padAmps = [.4, .22, .2, .17, .1];
 
-    // Мелодия колокольчиков — пентатоника ля-минора, редкая и тихая.
-    // Все ноты гаснут ДО конца петли (18.2 + 1.8 = 20.0).
     const bells = [
       (1.4, 659.25), (3.2, 880.0), (6.1, 587.33), (8.4, 523.25),
       (11.2, 783.99), (13.6, 659.25), (16.1, 987.77), (18.2, 880.0),
     ];
 
-    // Контент — функция позиции ВНУТРИ петли (tm = t mod loop): хвост
-    // файла в точности повторяет голову, а линейные края в перекрытии
-    // двух плееров суммируются в единицу — стык бесшовный.
-    double sample(double tm) {
-      final x = tm / loop * 4; // позиция в прогрессии, 0..4
+    // Арпеджио: восьмые (0.25 с), рисунок по тонам текущего аккорда.
+    const arpPattern = [0, 2, 4, 3, 2, 4, 2, 1, 0, 2, 4, 3, 4, 2, 3, 1];
+
+    // Плавный вход/выход слоя.
+    double ramp(double t, double a, double b) =>
+        ((t - a) / (b - a)).clamp(0.0, 1.0);
+
+    // Пэд + колокольчики — базовый слой, периодичен по 20 с.
+    double pad(double tm) {
+      final ct = tm % 20;
+      final x = ct / 5; // позиция в прогрессии, 0..4
       var s = 0.0;
       for (var ci = 0; ci < 4; ci++) {
-        // cos^2-окно вокруг «своего» такта; соседние окна дают в сумме 1.
         var d = (x - ci).abs();
-        if (d > 2) d = 4 - d; // круговое расстояние
+        if (d > 2) d = 4 - d;
         if (d >= 1) continue;
         final w = math.pow(math.cos(d * math.pi / 2), 2).toDouble();
         for (var k = 0; k < 5; k++) {
-          // лёгкое «дыхание» голосов — целое число циклов на петлю
-          final lfo = .8 + .2 * math.sin(2 * math.pi * (k + 1) * tm / loop + ci);
-          s += math.sin(2 * math.pi * chords[ci][k] * tm) * amps[k] * w * lfo;
+          final lfo = .8 + .2 * math.sin(2 * math.pi * (k + 1) * ct / 20 + ci);
+          s += math.sin(2 * math.pi * chords[ci][k] * ct) * padAmps[k] * w * lfo;
         }
-        // Суб-бас: тонкая синусоида на октаву ниже баса аккорда.
-        s += math.sin(2 * math.pi * snap(chords[ci][0] / 2) * tm) * .12 * w;
       }
+      return s;
+    }
+
+    double bell(double tm) {
+      final ct = tm % 20;
+      var s = 0.0;
       for (final (at, f) in bells) {
-        final j = tm - at;
+        final j = ct - at;
         if (j < 0 || j > 1.8) continue;
         final env = math.pow(math.e, -j * 2.8) * math.min(1.0, j / .012);
         s += (math.sin(2 * math.pi * f * j) +
                 .35 * math.sin(2 * math.pi * f * 2 * j)) *
-            .27 *
+            .25 *
             env;
       }
-      return s * .15;
+      return s;
+    }
+
+    // Аккорд, действующий в момент времени t (по началу такта ноты).
+    List<double> chordAt(double t) => chords[((t % 20) / 5).floor() % 4];
+
+    // Одна нота арпеджио, начавшаяся на границе восьмой.
+    double arpNote(double tm) {
+      final step = (tm / .25).floor();
+      final tau = tm - step * .25;
+      final ch = chordAt(step * .25);
+      final f = ch[arpPattern[step % arpPattern.length] % ch.length] * 2;
+      final env = math.pow(math.e, -tau * 7) * math.min(1.0, tau / .006);
+      return (math.sin(2 * math.pi * f * tau) +
+              .3 * math.sin(2 * math.pi * f * 2 * tau)) *
+          env;
+    }
+
+    double sub(double tm) {
+      final beat = (tm / .5).floor();
+      final tau = tm - beat * .5;
+      final f = chordAt(beat * .5)[0] / 2;
+      return math.sin(2 * math.pi * f * tau) * math.pow(math.e, -tau * 5);
+    }
+
+    double hat(double tm, int i) {
+      final tau = (tm + .25) % .5; // офф-бит
+      if (tau > .06) return 0;
+      // Детерминированный «шум» без Random — от номера сэмпла.
+      final r = (math.sin(i * 12.9898) * 43758.5453);
+      final noise = (r - r.floorToDouble()) * 2 - 1;
+      return noise * math.pow(math.e, -tau * 90);
+    }
+
+    double sample(double tm, int i) {
+      // Кривые слоёв: на краях петли все дополнительные слои в нуле,
+      // поэтому хвост == голове и повтор незаметен.
+      final arpG = ramp(tm, 38, 44) - ramp(tm, 142, 152);
+      final subG = ramp(tm, 78, 84) - ramp(tm, 136, 146);
+      final hatG = ramp(tm, 82, 88) - ramp(tm, 118, 128);
+      final bellG = 1 - .6 * (ramp(tm, 44, 50) - ramp(tm, 116, 124));
+
+      var s = pad(tm) + bell(tm) * bellG;
+      if (arpG > 0) {
+        // Эхо на 3/8 позади придаёт перебору глубину.
+        s += (arpNote(tm) + .4 * arpNote(math.max(0, tm - .375))) * .22 * arpG;
+      }
+      if (subG > 0) s += sub(tm) * .5 * subG;
+      if (hatG > 0) s += hat(tm, i) * .07 * hatG;
+      return s;
     }
 
     for (var i = 0; i < n; i++) {
@@ -305,12 +384,24 @@ class GameAudio {
       final env = t < xf
           ? t / xf
           : (t > loop ? (1 - (t - loop) / xf).clamp(0.0, 1.0) : 1.0);
-      data[i] = sample(t % loop) * env;
+      data[i] = sample(t % loop, i) * env;
+    }
+
+    // Нормализация: пик к 0.82 — громко, но без клиппинга и треска.
+    var peak = 0.0;
+    for (final v in data) {
+      peak = math.max(peak, v.abs());
+    }
+    if (peak > 0) {
+      final k = .82 / peak;
+      for (var i = 0; i < n; i++) {
+        data[i] *= k;
+      }
     }
     return _wav(data, rate: _musicRate);
   }
 
-  Uint8List _wav(Float64List samples, {int rate = _rate}) {
+  static Uint8List _wav(Float64List samples, {int rate = _rate}) {
     final n = samples.length;
     final bytes = Uint8List(44 + n * 2);
     final bd = ByteData.view(bytes.buffer);
