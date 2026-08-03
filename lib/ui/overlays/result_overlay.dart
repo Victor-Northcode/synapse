@@ -56,6 +56,32 @@ class _ResultOverlayState extends State<ResultOverlay> {
     }
   }
 
+  /// Строка наград победы: компьют и (если есть) осколки.
+  Widget _rewards(AppState app, LevelResult r) {
+    return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text('+${r.got}',
+              style: const TextStyle(
+                  fontFamily: Fonts.disp,
+                  fontSize: 40,
+                  letterSpacing: 2,
+                  color: Pal.yellow,
+                  shadows: [Shadow(color: Color(0x66FFD400), blurRadius: 34)])),
+          const SizedBox(width: 4),
+          const GameIcon('bolt', size: 30, solid: true, color: Pal.yellow),
+          if (r.shardGain > 0) ...[
+            const SizedBox(width: 12),
+            Text('+${r.shardGain}',
+                style: const TextStyle(
+                    fontFamily: Fonts.disp, fontSize: 22, color: Pal.cyan)),
+            const SizedBox(width: 3),
+            const ShardIcon(size: 15, color: Pal.cyan),
+          ],
+        ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = widget.app;
@@ -114,28 +140,19 @@ class _ResultOverlayState extends State<ResultOverlay> {
               // сжиматься, а не резаться.
               FittedBox(
                 fit: BoxFit.scaleDown,
-                child: Row(mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text('+${r.got}',
-                        style: const TextStyle(
-                            fontFamily: Fonts.disp,
-                            fontSize: 40,
-                            letterSpacing: 2,
-                            color: Pal.yellow,
-                            shadows: [Shadow(color: Color(0x66FFD400), blurRadius: 34)])),
-                    const SizedBox(width: 4),
-                    const GameIcon('bolt', size: 30, solid: true, color: Pal.yellow),
-                    if (r.shardGain > 0) ...[
-                      const SizedBox(width: 12),
-                      Text('+${r.shardGain}',
-                          style: const TextStyle(
-                              fontFamily: Fonts.disp, fontSize: 22, color: Pal.cyan)),
-                      const SizedBox(width: 3),
-                      const ShardIcon(size: 15, color: Pal.cyan),
-                    ],
-                  ]),
+                child: _rewards(app, r),
               ),
+              // Тизер следующей вехи: видно, ради чего идти дальше.
+              if (r.level % 10 != 0) ...[
+                const SizedBox(height: 10),
+                IconText(
+                  app
+                      .lt('mileNext')
+                      .replaceAll('{m}', '${(r.level ~/ 10 + 1) * 10}'),
+                  style: const TextStyle(
+                      fontFamily: Fonts.mono, fontSize: 10, color: Pal.faint),
+                ),
+              ],
             ],
             const SizedBox(height: 18),
             PillButton(

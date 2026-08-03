@@ -274,16 +274,14 @@ class HubScreen extends StatelessWidget {
     VoidCallback? onAdTap,
   }) {
     return Pressable(
-      onTap: onAdTap ?? onTap,
+      onTap: onTap,
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         decoration: BoxDecoration(
           color: const Color(0x0D78A0FF),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-              color: onAdTap != null
-                  ? const Color(0x40FFD400)
-                  : (can ? const Color(0x3300E5FF) : Pal.line)),
+              color: can ? const Color(0x3300E5FF) : Pal.line),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
@@ -327,52 +325,57 @@ class HubScreen extends StatelessWidget {
                   fontFamily: Fonts.mono, fontSize: 9.5, height: 1.45, color: Pal.bodyDim)),
           const SizedBox(height: 10),
           const Spacer(),
-          if (onAdTap == null)
-            Opacity(
-              opacity: can ? 1 : .5,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: can ? const Color(0x1500E5FF) : Colors.transparent,
-                  border: Border.all(
-                      color: can ? const Color(0x7300E5FF) : Pal.line),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: IconText(price,
-                    style: const TextStyle(
-                        fontFamily: Fonts.disp,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        color: Pal.cyan)),
-              ),
-            )
-          else
-            // Осколков не хватает — предмет отдаётся за ролик.
-            Container(
+          // Цель всегда на виду: цена показана даже когда не хватает —
+          // так есть ради чего копить.
+          Opacity(
+            opacity: can ? 1 : .5,
+            child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 8),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0x1CFFD400),
-                border: Border.all(color: const Color(0x66FFD400)),
+                color: can ? const Color(0x1500E5FF) : Colors.transparent,
+                border: Border.all(
+                    color: can ? const Color(0x7300E5FF) : Pal.line),
                 borderRadius: BorderRadius.circular(999),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x24FFD400), blurRadius: 12),
-                ],
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                GameIcon('tv', size: 13, color: Pal.yellow),
-                SizedBox(width: 5),
-                Text('+1',
-                    style: TextStyle(
-                        fontFamily: Fonts.disp,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                        color: Pal.yellow)),
-              ]),
+              child: IconText(price,
+                  style: const TextStyle(
+                      fontFamily: Fonts.disp,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: Pal.cyan)),
             ),
+          ),
+          // Не хватает — ролик приближает покупку на +1✦ (не даёт вещь).
+          if (onAdTap != null) ...[
+            const SizedBox(height: 6),
+            Pressable(
+              onTap: onAdTap,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0x1CFFD400),
+                  border: Border.all(color: const Color(0x66FFD400)),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                  GameIcon('tv', size: 12, color: Pal.yellow),
+                  SizedBox(width: 5),
+                  Text('+1',
+                      style: TextStyle(
+                          fontFamily: Fonts.disp,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10,
+                          color: Pal.yellow)),
+                  SizedBox(width: 2),
+                  ShardIcon(size: 8, color: Pal.yellow),
+                ]),
+              ),
+            ),
+          ],
         ]),
       ),
     );
@@ -389,7 +392,7 @@ class HubScreen extends StatelessWidget {
       name: app.tl('bn')[bi],
       desc: app.tl('bd')[bi],
       price: '${b.cost}✦',
-      onAdTap: !can && app.adOfferFor(b.key) ? () => app.watchAdForItem(b.key) : null,
+      onAdTap: !can && app.canAdShard ? app.watchAdForShards : null,
     );
   }
 
@@ -403,7 +406,7 @@ class HubScreen extends StatelessWidget {
       name: app.t('hintBuy'),
       desc: app.t('hintBuyD'),
       price: '${app.hintPrice()}✦',
-      onAdTap: !can && app.adOfferFor('hint') ? () => app.watchAdForItem('hint') : null,
+      onAdTap: !can && app.canAdShard ? app.watchAdForShards : null,
     );
   }
 

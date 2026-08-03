@@ -654,42 +654,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Предмет за ролик, когда осколков не хватает: бустер или подсказка.
-  /// До трёх предметов в день — тем же принципом, что и +1✦.
-  bool get canAdItem => adItems < 3 && Ads.instance.hasAds;
-
-  /// Осколков не хватает — вместо цены на карточке показывается кнопка
-  /// «за ролик» (пока не исчерпан дневной лимит предметов).
-  bool adOfferFor(String kind) {
-    if (!canAdItem) return false;
-    return const ['cut', 'stab', 'auto', 'hint'].contains(kind);
-  }
-
-  Future<void> watchAdForItem(String kind) async {
-    if (!canAdItem) return;
-    onEvent?.call(GameEvent(GameEventType.toast, text: t('adWatch')));
-    final ok = await Ads.instance.rewarded();
-    if (!ok) {
-      onEvent?.call(GameEvent(GameEventType.toast,
-          text: Ads.instance.hasAds ? t('adFail') : t('adOff')));
-      return;
-    }
-    adItems++;
-    String label;
-    if (kind == 'hint') {
-      hintStock++;
-      label = t('hintBought');
-    } else {
-      inv[kind] = (inv[kind] ?? 0) + 1;
-      final bi = kBoosters.indexWhere((b) => b.key == kind);
-      label = t('bBought').replaceAll('{n}', tl('bn')[bi]);
-    }
-    save();
-    onEvent?.call(GameEvent(GameEventType.toast, text: label));
-    GameAudio.instance.tone(1000, .12, 'sine', .06);
-    Haptics.instance.success();
-    notifyListeners();
-  }
+  /// Ролик — это ШАГ накопления, а не готовая вещь: целый предмет за
+  /// одну рекламу обесценивал и покупки, и само накопление.
+  /// Кнопка на карточке товара даёт тот же +1✦ из общего дневного пула.
+  bool get canAdShard => adShards < 3 && Ads.instance.hasAds;
 
   /// +1✦ за ролик, до трёх в день. Осколки — премиальная валюта,
   /// поэтому награда нарочно маленькая: быстро их не нафармить.

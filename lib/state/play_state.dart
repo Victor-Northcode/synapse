@@ -133,12 +133,14 @@ class PlayState extends ChangeNotifier {
     noHintRun = true;
     result = null;
 
-    // Бюджет ходов ужат (~15–25%): запас «на подумать» есть, но лишних
-    // движений он не прощает — каждая перестановка должна быть осознанной.
-    movesMax = (l.movesMax *
-            (kind == 2 ? 0.73 : (kind == 1 ? 0.79 : 0.85)) *
-            (1 + (app.timeBonus() - 1) * 0.5))
-        .round();
+    // Кривая сложности, как в нормальных играх: первые связи прощают
+    // почти всё (бюджет с запасом, игрок учится), дальше он плавно
+    // ужимается — к 50-й связи минус четверть, и выигрывает уже навык,
+    // а не запас ходов. «Сложные»/«очень сложные» жмут сверху.
+    final ramp = 1.08 - 0.28 * math.min(1.0, (level - 1) / 50.0);
+    final kindK = kind == 2 ? 0.88 : (kind == 1 ? 0.94 : 1.0);
+    movesMax =
+        (l.movesMax * ramp * kindK * (1 + (app.timeBonus() - 1) * 0.5)).round();
     movesMax += app.bonusMoves; // «Резервный контур» из мастерской
     movesMax = math.max(4, movesMax);
     if (liveEdge >= 0) movesMax = math.max(4, movesMax - 2);
@@ -676,10 +678,13 @@ class PlayState extends ChangeNotifier {
     }
     got += app.bonusTokens;
     app.tokens += got;
-    // Осколки — редкая валюта: только за мастерство на «очень сложных»
-    // связях. Обычные победы платят компьютом, а не осколками.
+    // Осколки — редкая валюта: мастерство на «очень сложных» связях
+    // и круглые вехи (каждая 10-я связь) — предсказуемая цель,
+    // ради которой хочется дойти. Обычные победы платят компьютом.
     final skillBonus = kd2 == 2 && left > 0.5 && noHintRun;
+    final milestone = level % 10 == 0;
     if (skillBonus) app.shards++;
+    if (milestone) app.shards++;
     if (level % 15 == 0) app.hintStock++;
     app.recordWin(level);
     app.level = level + 1;
@@ -695,8 +700,8 @@ class PlayState extends ChangeNotifier {
     }
     // Очки в таблицы лидеров: «распутано связей» = пройденный уровень.
     Lb.instance.submit(app.level - 1);
-    result = LevelResult(true, got, skillBonus ? 1 : 0, level,
-        crossings, nodes.length, edges.length, spec(app.level).n);
+    result = LevelResult(true, got, (skillBonus ? 1 : 0) + (milestone ? 1 : 0),
+        level, crossings, nodes.length, edges.length, spec(app.level).n);
     app.notify();
     onFx?.call(const PlayFxEvent(PlayFx.win));
     notifyListeners();
