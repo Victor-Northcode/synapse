@@ -35,6 +35,7 @@ void main() {
         final app = AppState()..loadSaved();
         app.setLang(lang);
         app.introSeen = true; // сразу в хаб
+        app.birthYear = 1995;
         app.tokens = 25; // задачи подсвечены «можно купить»
         app.shards = 9;
 

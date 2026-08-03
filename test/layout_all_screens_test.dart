@@ -38,6 +38,7 @@ Future<AppState> _app(String lang) async {
   final app = AppState()..loadSaved();
   app.setLang(lang);
   app.introSeen = true;
+  app.birthYear = 1995;
   app.tokens = 40;
   app.shards = 9;
   app.level = 12;

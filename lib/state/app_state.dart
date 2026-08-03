@@ -60,6 +60,11 @@ class AppState extends ChangeNotifier {
   /// Псевдоним для сетевого топа (генерируется один раз, без личного).
   String nick = '';
 
+  /// Год рождения из нейтрального возрастного экрана (0 — ещё не указан).
+  /// Нужен ТОЛЬКО для настройки рекламы по возрасту (COPPA/GDPR-K),
+  /// хранится локально и никуда не отправляется.
+  int birthYear = 0;
+
   /// Обменов энергии на осколки сегодня (лимит 2).
   int convUsed = 0;
   Map<String, int> inv = {'cut': 0, 'stab': 0, 'auto': 0};
@@ -211,6 +216,7 @@ class AppState extends ChangeNotifier {
       if (sv['wgd'] is List) wgDone = [for (final v in sv['wgd'] as List) v == true];
       nick = sv['nk'] as String? ?? '';
       convUsed = (sv['cvd'] as num?)?.toInt() ?? 0;
+      birthYear = (sv['by'] as num?)?.toInt() ?? 0;
       if (sv['inv'] is Map) {
         final m = sv['inv'] as Map;
         inv = {
@@ -256,6 +262,7 @@ class AppState extends ChangeNotifier {
       nick = makeNick(math.Random());
       save();
     }
+    Ads.instance.setAge(adAge);
     GameAudio.instance.enabled = soundOn;
     GameAudio.instance.volume = soundVol;
     GameAudio.instance.setMusicEnabled(musicOn);
@@ -280,6 +287,7 @@ class AppState extends ChangeNotifier {
       'wgd': wgDone,
       'nk': nick,
       'cvd': convUsed,
+      'by': birthYear,
       'inv': inv,
       'ads': adShards,
       'adb': adItems,
@@ -812,6 +820,23 @@ class AppState extends ChangeNotifier {
       ));
     }
     Push.instance.reschedule(entries);
+  }
+
+  /// Возраст для настройки рекламы. Консервативно: минус один год
+  /// (день рождения в этом году мог ещё не наступить). Пока год не
+  /// указан — считаем пользователя ребёнком: строже, но безопасно.
+  int get adAge {
+    if (birthYear <= 0) return 0;
+    return math.max(0, DateTime.now().year - birthYear - 1);
+  }
+
+  bool get needsAgeGate => birthYear <= 0;
+
+  void setBirthYear(int year) {
+    birthYear = year;
+    Ads.instance.setAge(adAge);
+    save();
+    notifyListeners();
   }
 
   void markIntroSeen() {

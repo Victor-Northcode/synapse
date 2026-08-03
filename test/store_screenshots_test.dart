@@ -87,6 +87,7 @@ Future<AppState> _makeApp(String lang) async {
   final app = AppState()..loadSaved();
   app.setLang(lang);
   app.introSeen = true;
+  app.birthYear = 1995;
   return app;
 }
 

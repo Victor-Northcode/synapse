@@ -37,10 +37,40 @@ class Ads {
 
   bool get needsPrivacyOptions => _privacyOptionsRequired;
 
+  /// Возраст пользователя из нейтрального возрастного экрана.
+  /// 0 (не указан) трактуется как ребёнок — строгий режим по умолчанию.
+  int _age = 0;
+
+  /// Применить возраст (COPPA/GDPR-K):
+  /// - до 13 лет — реклама «для детей» (TFCD) и контент не выше G;
+  /// - до 16 — без персонализации (TFUA, согласие не запрашивается);
+  /// - взрослым — обычный режим с формой согласия UMP.
+  /// Можно вызывать в любой момент — конфигурация досылается в SDK.
+  Future<void> setAge(int age) async {
+    _age = age;
+    if (!hasAds || _initFuture == null) return;
+    try {
+      await _applyRequestConfig();
+    } catch (_) {}
+  }
+
+  Future<void> _applyRequestConfig() {
+    return MobileAds.instance.updateRequestConfiguration(RequestConfiguration(
+      tagForChildDirectedTreatment: _age < 13
+          ? TagForChildDirectedTreatment.yes
+          : TagForChildDirectedTreatment.no,
+      tagForUnderAgeOfConsent:
+          _age < 16 ? TagForUnderAgeOfConsent.yes : TagForUnderAgeOfConsent.no,
+      maxAdContentRating: _age < 13
+          ? MaxAdContentRating.g
+          : (_age < 18 ? MaxAdContentRating.t : MaxAdContentRating.ma),
+    ));
+  }
+
   Future<void> _gatherConsent() async {
     final completer = Completer<void>();
     ConsentInformation.instance.requestConsentInfoUpdate(
-      ConsentRequestParameters(),
+      ConsentRequestParameters(tagForUnderAgeOfConsent: _age < 16),
       () async {
         try {
           await ConsentForm.loadAndShowConsentFormIfRequired((error) async {
@@ -67,6 +97,8 @@ class Ads {
   Future<void> init() {
     return _initFuture ??= () async {
       if (!hasAds) return;
+      // Возрастная конфигурация — ДО сбора согласия и инициализации.
+      await _applyRequestConfig();
       await _gatherConsent();
       await MobileAds.instance.initialize();
     }();

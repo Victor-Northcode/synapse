@@ -16,6 +16,7 @@ void main() {
     await Storage.instance.init();
     final app = AppState()..loadSaved();
     app.setLang('ru');
+    app.birthYear = 1995; // возрастной экран пройден
 
     await tester.pumpWidget(SynapseApp(app: app));
     // Экран загрузки ~2 c (в игре есть вечные анимации — settle не ждём).
@@ -58,6 +59,7 @@ void main() {
     final app = AppState()..loadSaved();
     app.setLang('ru');
     app.introSeen = true;
+    app.birthYear = 1995;
     app.level = 4; // уровень 4 всегда вводит липкий узел карточкой
 
     await tester.pumpWidget(SynapseApp(app: app));

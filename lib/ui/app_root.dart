@@ -10,6 +10,7 @@ import '../core/haptics.dart';
 import '../core/palette.dart';
 import '../state/app_state.dart';
 import '../state/play_state.dart';
+import 'overlays/age_gate.dart';
 import 'overlays/mech_overlay.dart';
 import 'overlays/privacy_overlay.dart';
 import 'overlays/result_overlay.dart';
@@ -202,17 +203,33 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
     Haptics.instance.light();
   }
 
+  bool showAgeGate = false;
+
   void _bootDone() {
-    setState(() => booting = false);
-    if (!app.introSeen) {
-      setState(() => storyMode = StoryMode.intro);
-    }
+    setState(() {
+      booting = false;
+      // Возрастной экран — раньше всего остального (и любой рекламы).
+      if (app.needsAgeGate) {
+        showAgeGate = true;
+      } else if (!app.introSeen) {
+        storyMode = StoryMode.intro;
+      }
+    });
+    _flushToast();
+  }
+
+  void _ageGateDone() {
+    setState(() {
+      showAgeGate = false;
+      if (!app.introSeen) storyMode = StoryMode.intro;
+    });
     _flushToast();
   }
 
   // ---------- back ----------
   bool _handleBack() {
     if (booting) return true;
+    if (showAgeGate) return true; // возрастной экран обязателен
     if (showPrivacy) {
       setState(() => showPrivacy = false);
       return true;
@@ -387,6 +404,12 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
                   child: PrivacyOverlay(
                       app: app, onClose: () => setState(() => showPrivacy = false)),
                 ),
+              ),
+
+            // Возрастной экран — до сюжета и любой рекламы.
+            if (showAgeGate)
+              Positioned.fill(
+                child: PopIn(child: AgeGate(app: app, onDone: _ageGateDone)),
               ),
 
             // Загрузка.

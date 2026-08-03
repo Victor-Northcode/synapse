@@ -45,6 +45,7 @@ void main() {
     await Storage.instance.init();
     final app = AppState()..loadSaved();
     app.setLang('ru');
+    app.birthYear = 1995;
 
     await tester.pumpWidget(SynapseApp(app: app));
 
@@ -138,6 +139,7 @@ void main() {
     final app = AppState()..loadSaved();
     app.setLang('ru');
     app.introSeen = true;
+    app.birthYear = 1995;
     app.tokens = 34;
     app.shards = 7;
     app.level = 12;
