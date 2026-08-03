@@ -39,7 +39,7 @@ void main() {
         app.shards = 9;
 
         await tester.pumpWidget(SynapseApp(app: app));
-        await tester.pump(const Duration(milliseconds: 2100));
+        await tester.pump(const Duration(milliseconds: 2750));
         await tester.pump(const Duration(milliseconds: 300));
 
         // Склад (вкладка нижнего меню).

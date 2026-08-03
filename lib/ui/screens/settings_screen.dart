@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/ads.dart';
+import '../../core/haptics.dart';
 import '../../core/palette.dart';
 import '../../state/app_state.dart';
 import '../layout.dart';
@@ -147,6 +148,7 @@ class SettingsScreen extends StatelessWidget {
             for (final e in kLangNames.entries)
               GestureDetector(
                 onTap: () {
+                  Haptics.instance.snap();
                   app.setLang(e.key);
                   Navigator.pop(context);
                 },
@@ -281,7 +283,12 @@ class _NeonSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => onChanged(!value),
+      onTap: () {
+        // Микро-щелчок, как у настоящего тумблера. Отдаём ДО onChanged:
+        // при выключении вибрации сам щелчок ещё успевает сыграть.
+        Haptics.instance.snap();
+        onChanged(!value);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: 46,

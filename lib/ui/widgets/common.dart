@@ -244,37 +244,34 @@ class IconText extends StatelessWidget {
   }
 
   /// {tv} {bulb} {gift} {bolt} — плейсхолдеры словаря; ✦ и ✓ — векторные.
+  ///
+  /// Иконка ПРИКЛЕИВАЕТСЯ к слову перед ней: «…не хватает 4{bolt}» никогда
+  /// не разорвётся так, чтобы молния уехала на строку одна — число и
+  /// иконка упаковываются в один неразрывный WidgetSpan.
   List<InlineSpan> _inline(String text, TextStyle style) {
     final spans = <InlineSpan>[];
     final re = RegExp(r'\{(tv|bulb|gift|bolt)\}|✦|✓');
     var last = 0;
     for (final m in re.allMatches(text)) {
-      if (m.start > last) {
-        spans.add(TextSpan(text: text.substring(last, m.start), style: style));
+      var pre = text.substring(last, m.start);
+      final icon = _icon(m, style);
+      // Слово, к которому прижимается иконка (текст до последнего пробела).
+      String glueWord = '';
+      if (pre.isNotEmpty && !pre.endsWith(' ')) {
+        final cut = pre.lastIndexOf(' ') + 1;
+        glueWord = pre.substring(cut);
+        pre = pre.substring(0, cut);
       }
-      final sz = (style.fontSize ?? 12) * 1.15;
-      if (m.group(0) == '✓') {
-        spans.add(WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: Glyph(GlyphKind.check, size: sz, color: style.color ?? Pal.green),
-        ));
-      } else if (m.group(0) == '✦') {
-        spans.add(WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1.5),
-            child: ShardIcon(size: sz * .82, color: style.color ?? Pal.cyan),
-          ),
-        ));
+      if (pre.isNotEmpty) spans.add(TextSpan(text: pre, style: style));
+      if (glueWord.isEmpty) {
+        spans.add(WidgetSpan(alignment: PlaceholderAlignment.middle, child: icon));
       } else {
-        final name = m.group(1)!;
         spans.add(WidgetSpan(
           alignment: PlaceholderAlignment.middle,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1),
-            child: GameIcon(name,
-                size: sz, color: style.color ?? Pal.text, solid: name == 'bolt'),
-          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(glueWord, style: style),
+            icon,
+          ]),
         ));
       }
       last = m.end;
@@ -283,6 +280,25 @@ class IconText extends StatelessWidget {
       spans.add(TextSpan(text: text.substring(last), style: style));
     }
     return spans;
+  }
+
+  Widget _icon(RegExpMatch m, TextStyle style) {
+    final sz = (style.fontSize ?? 12) * 1.15;
+    if (m.group(0) == '✓') {
+      return Glyph(GlyphKind.check, size: sz, color: style.color ?? Pal.green);
+    }
+    if (m.group(0) == '✦') {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 1.5),
+        child: ShardIcon(size: sz * .82, color: style.color ?? Pal.cyan),
+      );
+    }
+    final name = m.group(1)!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1),
+      child: GameIcon(name,
+          size: sz, color: style.color ?? Pal.text, solid: name == 'bolt'),
+    );
   }
 }
 

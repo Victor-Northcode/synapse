@@ -93,6 +93,9 @@ class GameAudio {
     try {
       if (_music == null) {
         final p = AudioPlayer();
+        // lowLatency (SoundPool на Android) зацикливает БЕЗ щели на стыке —
+        // MediaPlayer при loop даёт слышимую паузу между повторами.
+        await p.setPlayerMode(PlayerMode.lowLatency);
         await p.setReleaseMode(ReleaseMode.loop);
         await p.setVolume(.5);
         _music = p;
@@ -211,53 +214,73 @@ class GameAudio {
     return _wav(data);
   }
 
-  /// 16-секундная бесшовная петля эмбиента.
+  /// 20-секундная бесшовная петля эмбиента: четыре аккорда перетекают
+  /// по кругу (Am → F → C → G), поверх — тихая пентатоническая мелодия
+  /// колокольчиков и мягкий суб-бас. Все частоты кратны длине петли,
+  /// LFO — целое число циклов: стык математически бесшовный.
+  /// Частота 16 кГц: пэду выше 8 кГц ничего не нужно, а декодированный
+  /// буфер остаётся под лимитом SoundPool (гэплесс-луп на Android).
+  static const _musicRate = 16000;
+
   Uint8List _synthMusic() {
-    const loop = 16.0;
-    final n = (_rate * loop).round();
+    const loop = 20.0;
+    final n = (_musicRate * loop).round();
     final data = Float64List(n);
 
     // Частота подгоняется к целому числу циклов на петлю — стык не щёлкает.
     double snap(double f) => (f * loop).roundToDouble() / loop;
 
-    // Am(add9) → G(add9): спокойная пара без тяготения.
-    final chordA = [110.0, 220.0, 261.63, 329.63, 493.88].map(snap).toList();
-    final chordB = [98.0, 196.0, 246.94, 293.66, 440.0].map(snap).toList();
-    const amps = [.42, .26, .2, .16, .07];
+    // Прогрессия Am → F → C → G, по 5 секунд на аккорд.
+    final chords = [
+      [110.0, 164.81, 220.0, 261.63, 329.63], // Am
+      [87.31, 174.61, 220.0, 261.63, 349.23], // F
+      [130.81, 196.0, 261.63, 329.63, 392.0], // C
+      [98.0, 146.83, 246.94, 293.66, 392.0], // G
+    ].map((c) => c.map(snap).toList()).toList();
+    const amps = [.4, .22, .2, .17, .1];
 
     for (var i = 0; i < n; i++) {
-      final t = i / _rate;
-      // Перекрёстное затухание аккордов: период равен петле.
-      final wA = .5 * (1 + math.cos(2 * math.pi * t / loop));
-      final wB = 1 - wA;
+      final t = i / _musicRate;
+      final x = t / loop * 4; // позиция в прогрессии, 0..4
       var s = 0.0;
-      for (var k = 0; k < chordA.length; k++) {
-        // Медленное «дыхание» каждого голоса (целое число циклов на петлю).
-        final lfoA = .75 + .25 * math.sin(2 * math.pi * (k + 1) * t / loop);
-        final lfoB = .75 + .25 * math.cos(2 * math.pi * (k + 2) * t / loop);
-        s += math.sin(2 * math.pi * chordA[k] * t) * amps[k] * wA * lfoA;
-        s += math.sin(2 * math.pi * chordB[k] * t) * amps[k] * wB * lfoB;
+      for (var ci = 0; ci < 4; ci++) {
+        // cos^2-окно вокруг «своего» такта; соседние окна дают в сумме 1.
+        var d = (x - ci).abs();
+        if (d > 2) d = 4 - d; // круговое расстояние
+        if (d >= 1) continue;
+        final w = math.pow(math.cos(d * math.pi / 2), 2).toDouble();
+        for (var k = 0; k < 5; k++) {
+          // лёгкое «дыхание» голосов — целое число циклов на петлю
+          final lfo = .8 + .2 * math.sin(2 * math.pi * (k + 1) * t / loop + ci);
+          s += math.sin(2 * math.pi * chords[ci][k] * t) * amps[k] * w * lfo;
+        }
+        // Суб-бас: тонкая синусоида на октаву ниже баса аккорда.
+        s += math.sin(2 * math.pi * snap(chords[ci][0] / 2) * t) * .12 * w;
       }
-      data[i] = s * .16;
+      data[i] = s * .15;
     }
 
-    // Редкие тихие «колокольчики» пентатоники поверх пэда.
+    // Мелодия колокольчиков — пентатоника ля-минора, редкая и тихая.
     const bells = [
-      (2.2, 880.0), (5.9, 659.25), (9.4, 987.77), (13.1, 739.99),
+      (1.4, 659.25), (3.2, 880.0), (6.1, 587.33), (8.4, 523.25),
+      (11.2, 783.99), (13.6, 659.25), (16.1, 987.77), (18.2, 880.0),
     ];
     for (final (at, f) in bells) {
-      final start = (at * _rate).round();
-      final len = (_rate * 1.6).round();
+      final start = (at * _musicRate).round();
+      final len = (_musicRate * 1.8).round();
       for (var j = 0; j < len && start + j < n; j++) {
-        final t = j / _rate;
-        final env = math.pow(math.e, -t * 3.2) * math.min(1.0, t / .01);
-        data[start + j] += math.sin(2 * math.pi * f * t) * .045 * env;
+        final t = j / _musicRate;
+        final env = math.pow(math.e, -t * 2.8) * math.min(1.0, t / .012);
+        data[start + j] += (math.sin(2 * math.pi * f * t) +
+                .35 * math.sin(2 * math.pi * f * 2 * t)) *
+            .04 *
+            env;
       }
     }
-    return _wav(data);
+    return _wav(data, rate: _musicRate);
   }
 
-  Uint8List _wav(Float64List samples) {
+  Uint8List _wav(Float64List samples, {int rate = _rate}) {
     final n = samples.length;
     final bytes = Uint8List(44 + n * 2);
     final bd = ByteData.view(bytes.buffer);
@@ -273,8 +296,8 @@ class GameAudio {
     bd.setUint32(16, 16, Endian.little);
     bd.setUint16(20, 1, Endian.little);
     bd.setUint16(22, 1, Endian.little);
-    bd.setUint32(24, _rate, Endian.little);
-    bd.setUint32(28, _rate * 2, Endian.little);
+    bd.setUint32(24, rate, Endian.little);
+    bd.setUint32(28, rate * 2, Endian.little);
     bd.setUint16(32, 2, Endian.little);
     bd.setUint16(34, 16, Endian.little);
     str(36, 'data');

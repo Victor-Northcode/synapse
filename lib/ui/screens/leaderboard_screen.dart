@@ -3,15 +3,19 @@ import 'package:games_services/games_services.dart';
 
 import '../../core/leaderboard.dart';
 import '../../core/palette.dart';
+import '../../game/rivals.dart';
 import '../../state/app_state.dart';
 import '../layout.dart';
 import '../widgets/common.dart';
 
 /// Топ игроков.
 ///
-/// Сверху — уровень оператора и личные рекорды: они локальные и работают
-/// всегда, даже без интернета. Ниже — общий рейтинг (Game Center / Play
-/// Игры), когда он настроен и есть сеть; иначе — честное объяснение.
+/// Сверху — уровень оператора и личные рекорды (локальные, работают
+/// всегда). Ниже — рейтинг: если настроен и доступен онлайн (Game
+/// Center / Play Игры) — берём его; в любом другом случае показывается
+/// локальный рейтинг операторов сети, который генерируется на
+/// устройстве и масштабируется под прогресс игрока. Ошибок «не удалось
+/// загрузить» больше не существует: таблица есть ВСЕГДА.
 class LeaderboardScreen extends StatefulWidget {
   final AppState app;
   final VoidCallback onClose;
@@ -33,13 +37,11 @@ class LeaderboardScreen extends StatefulWidget {
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
 
-enum _LbState { offline, needSignIn, loading, ready, error }
-
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   bool weekly = true;
-  _LbState state = _LbState.loading;
-  List<LeaderboardScoreData> rows = [];
-  LeaderboardScoreData? me;
+  bool loading = true;
+  List<RivalRow> rows = [];
+  RivalRow? me;
 
   @override
   void initState() {
@@ -47,38 +49,53 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     _load();
   }
 
+  RivalRow _fromScore(LeaderboardScoreData r, {bool mine = false}) => RivalRow(
+      r.rank, mine ? widget.app.lt('lbYou') : r.scoreHolder.displayName,
+      r.rawScore, mine);
+
   Future<void> _load() async {
+    final app = widget.app;
     final preview = widget.previewData;
     if (preview != null) {
       setState(() {
-        rows = preview.$1;
-        me = preview.$2;
-        state = _LbState.ready;
+        rows = [for (final r in preview.$1) _fromScore(r)];
+        me = preview.$2 == null ? null : _fromScore(preview.$2!, mine: true);
+        loading = false;
       });
       return;
     }
-    if (!Lb.instance.available) {
-      setState(() => state = _LbState.offline);
-      return;
+    setState(() => loading = true);
+
+    // Онлайн-таблица — только если она настроена и реально отвечает.
+    if (Lb.instance.available) {
+      try {
+        if (await Lb.instance.ensureSignedIn()) {
+          final list = await Lb.instance.top(weekly: weekly);
+          final my = await Lb.instance.myScore(weekly: weekly);
+          if (mounted && list != null && list.isNotEmpty) {
+            setState(() {
+              rows = [for (final r in list) _fromScore(r)];
+              me = my == null ? null : _fromScore(my, mine: true);
+              loading = false;
+            });
+            return;
+          }
+        }
+      } catch (_) {}
     }
-    setState(() => state = _LbState.loading);
-    final signed = await Lb.instance.ensureSignedIn();
     if (!mounted) return;
-    if (!signed) {
-      setState(() => state = _LbState.needSignIn);
-      return;
-    }
-    final list = await Lb.instance.top(weekly: weekly);
-    final my = await Lb.instance.myScore(weekly: weekly);
-    if (!mounted) return;
+
+    // Локальный рейтинг: детерминированный, без сети, всегда есть.
+    final localRows = buildRivals(
+      myScore: weekly ? app.wgp[0] : app.totalWins,
+      myName: app.lt('lbYou'),
+      seed: weekly ? 1000 + app.weekKey : 424242,
+      count: weekly ? 18 : 24,
+    );
     setState(() {
-      if (list == null) {
-        state = _LbState.error;
-      } else {
-        rows = list;
-        me = my;
-        state = _LbState.ready;
-      }
+      rows = localRows;
+      me = localRows.firstWhere((r) => r.me);
+      loading = false;
     });
   }
 
@@ -91,7 +108,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   @override
   Widget build(BuildContext context) {
     final app = widget.app;
-    final hasOnline = Lb.instance.available || widget.previewData != null;
     // Один общий скролл: рекорды, вкладки и рейтинг едут вместе —
     // на коротких экранах (телефон в альбоме) ничего не переполняется.
     return Container(
@@ -108,22 +124,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 padding: const EdgeInsets.only(bottom: 10),
                 children: [
                   StaggerIn(index: 1, child: _recordsPanel(app)),
-                  if (hasOnline)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                      child: Row(children: [
-                        Expanded(child: _tab(app.lt('lbWeek'), true)),
-                        const SizedBox(width: 8),
-                        Expanded(child: _tab(app.lt('lbAll'), false)),
-                      ]),
-                    )
-                  else
-                    const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                    child: Row(children: [
+                      Expanded(child: _tab(app.lt('lbWeek'), true)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _tab(app.lt('lbAll'), false)),
+                    ]),
+                  ),
                   ..._body(app),
                 ],
               ),
             ),
-            if (state == _LbState.ready && me != null) _meRow(app),
+            if (!loading && me != null) _meRow(app),
           ]),
         ),
       ),
@@ -327,134 +340,48 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  /// Содержимое онлайн-части — элементы общего списка.
+  /// Список рейтинга — элементы общего скролла.
   List<Widget> _body(AppState app) {
-    switch (state) {
-      case _LbState.offline:
-        // Онлайн-рейтинг недоступен (не настроен или нет сети) —
-        // объясняем и показываем, что локальные рекорды при этом живы.
-        return [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(30, 26, 30, 20),
-            child: Column(children: [
-              const GameIcon('sat', size: 40, color: Pal.dim),
-              const SizedBox(height: 16),
-              Text(app.lt('lbOffline'),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontFamily: Fonts.mono,
-                      fontSize: 12,
-                      height: 1.7,
-                      color: Pal.bodyDim)),
-            ]),
-          ),
-        ];
-      case _LbState.loading:
-        return const [
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: 40),
-            child: Center(
-              child: SizedBox(
-                width: 26,
-                height: 26,
-                child: CircularProgressIndicator(strokeWidth: 2.4, color: Pal.cyan),
-              ),
+    if (loading) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: Center(
+            child: SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(strokeWidth: 2.4, color: Pal.cyan),
             ),
           ),
-        ];
-      case _LbState.needSignIn:
-        return [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(30, 20, 30, 20),
-            child: Column(children: [
-              const GameIcon('trophy', size: 44, color: Pal.yellow),
-              const SizedBox(height: 16),
-              Text(app.lt('lbSignT'),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontFamily: Fonts.disp,
-                      fontSize: 16,
-                      letterSpacing: 1.8,
-                      height: 1.5,
-                      color: Pal.text)),
-              const SizedBox(height: 10),
-              Text(
-                app.lt('lbSignB').replaceAll('{s}', Lb.instance.serviceName),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontFamily: Fonts.mono,
-                    fontSize: 12,
-                    height: 1.7,
-                    color: Pal.bodyDim),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: 240,
-                child: PillButton(
-                  minHeight: 58,
-                  onTap: _load,
-                  child: Text(app.lt('lbSignBtn')),
-                ),
-              ),
-            ]),
-          ),
-        ];
-      case _LbState.error:
-        return [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(30, 26, 30, 20),
-            child: Column(children: [
-              Text(app.lt('lbFail'),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontFamily: Fonts.mono, fontSize: 12.5, height: 1.7, color: Pal.dim)),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: 200,
-                child: GhostButton(onTap: _load, child: Text(app.lt('lbRetry'))),
-              ),
-            ]),
-          ),
-        ];
-      case _LbState.ready:
-        if (rows.isEmpty) {
-          return [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 30),
-              child: Text(app.lt('lbEmpty'),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontFamily: Fonts.mono, fontSize: 12.5, height: 1.7, color: Pal.dim)),
-            ),
-          ];
-        }
-        return [
-          for (var i = 0; i < rows.length; i++)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TweenAnimationBuilder<double>(
-                key: ValueKey('$weekly-$i'),
-                tween: Tween(begin: 0, end: 1),
-                duration: Duration(milliseconds: 240 + (i.clamp(0, 14)) * 40),
-                curve: Curves.easeOutCubic,
-                builder: (context, v, child) => Opacity(
-                  opacity: v,
-                  child:
-                      Transform.translate(offset: Offset(0, 10 * (1 - v)), child: child),
-                ),
-                child: _row(rows[i], mine: false),
-              ),
-            ),
-        ];
+        ),
+      ];
     }
+    return [
+      for (var i = 0; i < rows.length; i++)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TweenAnimationBuilder<double>(
+            key: ValueKey('$weekly-$i'),
+            tween: Tween(begin: 0, end: 1),
+            duration: Duration(milliseconds: 240 + (i.clamp(0, 14)) * 40),
+            curve: Curves.easeOutCubic,
+            builder: (context, v, child) => Opacity(
+              opacity: v,
+              child: Transform.translate(offset: Offset(0, 10 * (1 - v)), child: child),
+            ),
+            child: _row(rows[i]),
+          ),
+        ),
+    ];
   }
 
   static const _medal = [Color(0xFFFFD400), Color(0xFFC9D3E0), Color(0xFFD8935B)];
 
-  Widget _row(LeaderboardScoreData r, {required bool mine}) {
+  Widget _row(RivalRow r) {
     final top3 = r.rank >= 1 && r.rank <= 3;
     final medal = top3 ? _medal[r.rank - 1] : null;
-    final name = mine ? widget.app.lt('lbYou') : r.scoreHolder.displayName;
+    final mine = r.me;
+    final name = r.name;
     return Container(
       margin: const EdgeInsets.only(bottom: 7),
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
@@ -526,7 +453,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             child: Text.rich(
               TextSpan(children: [
                 TextSpan(
-                    text: '${r.rawScore}',
+                    text: '${r.score}',
                     style: TextStyle(
                         fontFamily: Fonts.disp,
                         fontWeight: FontWeight.w700,
@@ -548,7 +475,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Widget _meRow(AppState app) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 12),
-      child: _row(me!, mine: true),
+      child: _row(me!),
     );
   }
 }

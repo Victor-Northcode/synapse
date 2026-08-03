@@ -14,12 +14,15 @@ class PrivacyOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final raw = kPrivacyText[app.lang] ?? kPrivacyText['en']!;
+    // Окно не растягивается на весь экран: максимум ~2/3 высоты,
+    // длинный текст прокручивается внутри.
+    final maxH = (MediaQuery.of(context).size.height * .68).clamp(300.0, 560.0);
     return Container(
       color: const Color(0xB804060E),
       alignment: Alignment.center,
       padding: const EdgeInsets.all(20),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 420),
+        constraints: BoxConstraints(maxWidth: 420, maxHeight: maxH),
         padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
         decoration: BoxDecoration(
           color: Pal.ovCard,

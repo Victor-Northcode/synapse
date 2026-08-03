@@ -48,6 +48,12 @@ class AppState extends ChangeNotifier {
   int streak = 0;
   List<int> gp = [0, 0, 0];
   List<bool> gDone = [false, false, false];
+
+  /// Цели недели: номер недели (от эпохи, с понедельника), прогресс
+  /// и выполненность. Новые поля сейва — старые сохранения дают нули.
+  int weekKey = 0;
+  List<int> wgp = [0, 0, 0];
+  List<bool> wgDone = [false, false, false];
   Map<String, int> inv = {'cut': 0, 'stab': 0, 'auto': 0};
   int adShards = 0;
   int adItems = 0; // предметы за ролик, до 3 в день
@@ -61,7 +67,7 @@ class AppState extends ChangeNotifier {
   int totalWins = 0;
   bool musicOn = true;
   int theme = 0;
-  List<int> owned = [1, 0, 0, 0];
+  List<int> owned = List.generate(kThemes.length, (i) => i == 0 ? 1 : 0);
   List<bool> done = [];
   int hintBought = 0;
   bool soundOn = true;
@@ -189,6 +195,9 @@ class AppState extends ChangeNotifier {
       streak = (sv['st'] as num?)?.toInt() ?? 0;
       if (sv['gp'] is List) gp = [for (final v in sv['gp'] as List) (v as num).toInt()];
       if (sv['gd'] is List) gDone = [for (final v in sv['gd'] as List) v == true];
+      weekKey = (sv['wkk'] as num?)?.toInt() ?? 0;
+      if (sv['wgp'] is List) wgp = [for (final v in sv['wgp'] as List) (v as num).toInt()];
+      if (sv['wgd'] is List) wgDone = [for (final v in sv['wgd'] as List) v == true];
       if (sv['inv'] is Map) {
         final m = sv['inv'] as Map;
         inv = {
@@ -247,6 +256,9 @@ class AppState extends ChangeNotifier {
       'st': streak,
       'gp': gp,
       'gd': gDone,
+      'wkk': weekKey,
+      'wgp': wgp,
+      'wgd': wgDone,
       'inv': inv,
       'ads': adShards,
       'adb': adItems,
@@ -362,7 +374,12 @@ class AppState extends ChangeNotifier {
     return '${now.year}-${now.month}-${now.day}';
   }
 
+  /// Номер недели от эпохи (понедельник — первый день).
+  int _thisWeek() =>
+      ((DateTime.now().toUtc().millisecondsSinceEpoch ~/ 86400000) + 3) ~/ 7;
+
   void checkDay() {
+    _checkWeek();
     final td = _today();
     if (dayKey == td) return;
     final prev = dayKey;
@@ -379,6 +396,37 @@ class AppState extends ChangeNotifier {
     save();
   }
 
+  void _checkWeek() {
+    final wk = _thisWeek();
+    if (weekKey == wk) return;
+    weekKey = wk;
+    wgp = [0, 0, 0];
+    wgDone = [false, false, false];
+    save();
+  }
+
+  /// Прогресс цели недели: 0 — связи, 1 — задачи, 2 — дни с полным
+  /// комплектом целей дня. Награды крупнее дневных (kWeekRewards).
+  void weekHit(int i, [int n = 1]) {
+    // Счёт продолжается и после выполнения (нужен недельному топу),
+    // награда выдаётся один раз.
+    wgp[i] += n;
+    if (!wgDone[i] && wgp[i] >= kWeekGoals[i]) {
+      wgDone[i] = true;
+      shards += kWeekRewards[i];
+      Future.delayed(const Duration(milliseconds: 1800), () {
+        onEvent?.call(GameEvent(GameEventType.toast,
+            text: lt('wkDone')
+                .replaceAll('{n}', lt('wk$i'))
+                .replaceAll('{s}', '${kWeekRewards[i]}')));
+        GameAudio.instance.chord([659, 880, 1175]);
+        Haptics.instance.success();
+      });
+      save();
+      notifyListeners();
+    }
+  }
+
   void goalHit(int i, [int n = 1]) {
     if (gDone[i]) return;
     gp[i] += n;
@@ -391,6 +439,7 @@ class AppState extends ChangeNotifier {
       if (gDone[0] && gDone[1] && gDone[2]) {
         streak++;
         if (streak > bestStreak) bestStreak = streak;
+        weekHit(2); // день с полным комплектом целей — шаг цели недели
         // Осколки — редкая валюта: серия платит только на вехах,
         // а не каждый день (иначе они копятся быстрее, чем тратятся).
         final bonus = streak % 14 == 0 ? 4 : (streak % 7 == 0 ? 2 : (streak % 3 == 0 ? 1 : 0));
@@ -418,6 +467,7 @@ class AppState extends ChangeNotifier {
     checkDay();
     final before = operatorLevel;
     totalWins++;
+    weekHit(0);
     if (lvl > bestLevel) bestLevel = lvl;
     if (streak > bestStreak) bestStreak = streak;
     final after = operatorLevel;
@@ -440,6 +490,7 @@ class AppState extends ChangeNotifier {
     done[i] = true;
     if (tasks[i].fx == 'h') hintStock++;
     goalHit(2);
+    weekHit(1);
     save();
     GameAudio.instance.tone(660, .1, 'square', .06);
     Future.delayed(const Duration(milliseconds: 90),
@@ -669,8 +720,11 @@ class AppState extends ChangeNotifier {
     dayKey = '';
     gp = [0, 0, 0];
     gDone = [false, false, false];
+    weekKey = 0;
+    wgp = [0, 0, 0];
+    wgDone = [false, false, false];
     theme = 0;
-    owned = [1, 0, 0, 0];
+    owned = List.generate(kThemes.length, (i) => i == 0 ? 1 : 0);
     introSeen = false;
     buildChapter();
     checkDay();

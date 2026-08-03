@@ -14,7 +14,7 @@ class BootScreen extends StatefulWidget {
 
 class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1960));
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 2600));
 
   @override
   void initState() {
@@ -36,14 +36,14 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
     return AnimatedBuilder(
       animation: _c,
       builder: (context, _) {
-        final t = _c.value * 1960; // мс
-        final drop = Curves.easeOutBack.transform(_seg(t, 300, 900));
-        final ring = _seg(t, 920, 1420);
-        final wire = _seg(t, 1200, 1800);
-        final nameA = _seg(t, 1400, 1800);
-        final tagA = _seg(t, 1550, 1950);
-        final load = _seg(t, 300, 1800);
-        final leave = _seg(t, 1700, 1960);
+        final t = _c.value * 2600; // мс
+        final drop = Curves.easeOutBack.transform(_seg(t, 400, 1150));
+        final ring = _seg(t, 1170, 1750);
+        final wire = _seg(t, 1500, 2250);
+        final nameA = _seg(t, 1750, 2250);
+        final tagA = _seg(t, 1950, 2500);
+        final load = _seg(t, 400, 2350);
+        final leave = _seg(t, 2320, 2600);
         return Opacity(
           opacity: 1 - leave,
           child: Container(
@@ -139,7 +139,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
                                 child: Center(
                                   child: AnimatedOpacity(
                                     duration: const Duration(milliseconds: 180),
-                                    opacity: t > 900 ? 1 : 0,
+                                    opacity: t > 1150 ? 1 : 0,
                                     child: Container(
                                       width: 22,
                                       height: 22,

@@ -133,8 +133,10 @@ class PlayState extends ChangeNotifier {
     noHintRun = true;
     result = null;
 
+    // Бюджет ходов ужат (~15–25%): запас «на подумать» есть, но лишних
+    // движений он не прощает — каждая перестановка должна быть осознанной.
     movesMax = (l.movesMax *
-            (kind == 2 ? 0.86 : (kind == 1 ? 0.93 : 1.0)) *
+            (kind == 2 ? 0.73 : (kind == 1 ? 0.79 : 0.85)) *
             (1 + (app.timeBonus() - 1) * 0.5))
         .round();
     movesMax = math.max(4, movesMax);

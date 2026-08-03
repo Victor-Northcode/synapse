@@ -123,7 +123,7 @@ void main() {
         // 1. Игровое поле с пересечениями.
         final app1 = await _makeApp(lang);
         await tester.pumpWidget(_frame(cap[0], SynapseApp(app: app1)));
-        await tester.pump(const Duration(milliseconds: 2100)); // загрузка
+        await tester.pump(const Duration(milliseconds: 2750)); // загрузка
         await tester.pump(const Duration(milliseconds: 200));
         await tester.tap(find.byType(PillButton).first);
         await tester.pump(const Duration(milliseconds: 1300)); // pop узлов
@@ -158,7 +158,7 @@ void main() {
         app3.level = 23;
         app3.shards = 6;
         await tester.pumpWidget(_frame(cap[2], SynapseApp(app: app3)));
-        await tester.pump(const Duration(milliseconds: 2100));
+        await tester.pump(const Duration(milliseconds: 2750));
         await tester.pump(const Duration(milliseconds: 1000));
         n = 3;
         await expectLater(find.byType(MaterialApp).first,
@@ -200,7 +200,7 @@ void main() {
         app6.shards = 9;
         app6.tokens = 12;
         await tester.pumpWidget(_frame(cap[5], SynapseApp(app: app6)));
-        await tester.pump(const Duration(milliseconds: 2100));
+        await tester.pump(const Duration(milliseconds: 2750));
         await tester.pump(const Duration(milliseconds: 200));
         await tester.tap(find.text(app6.t('tab2')).first);
         await tester.pump(const Duration(milliseconds: 400));

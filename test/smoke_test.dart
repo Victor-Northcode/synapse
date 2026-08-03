@@ -19,7 +19,7 @@ void main() {
 
     await tester.pumpWidget(SynapseApp(app: app));
     // Экран загрузки ~2 c (в игре есть вечные анимации — settle не ждём).
-    await tester.pump(const Duration(milliseconds: 2100));
+    await tester.pump(const Duration(milliseconds: 2750));
     await tester.pump(const Duration(milliseconds: 200));
 
     // Интро: пять панелей.
@@ -61,7 +61,7 @@ void main() {
     app.level = 4; // уровень 4 всегда вводит липкий узел карточкой
 
     await tester.pumpWidget(SynapseApp(app: app));
-    await tester.pump(const Duration(milliseconds: 2100));
+    await tester.pump(const Duration(milliseconds: 2750));
     await tester.pump(const Duration(milliseconds: 300));
 
     await tester.tap(find.byType(PillButton).first);

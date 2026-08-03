@@ -143,7 +143,7 @@ void main() {
     app.level = 12;
 
     await tester.pumpWidget(SynapseApp(app: app));
-    await tester.pump(const Duration(milliseconds: 2100));
+    await tester.pump(const Duration(milliseconds: 2750));
     await tester.pump(const Duration(milliseconds: 400));
     await expectLater(
         find.byType(SynapseApp), matchesGoldenFile('goldens/08-ipad-hub.png'));

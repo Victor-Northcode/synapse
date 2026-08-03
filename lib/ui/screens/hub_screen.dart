@@ -148,18 +148,22 @@ class HubScreen extends StatelessWidget {
 
   // ---------- склад: бустеры ----------
   Widget _shopPanel(AppState app) {
+    // Карточки по две в строке; IntrinsicHeight + stretch выравнивает
+    // высоту пары, описания видны целиком — без обрезаний.
+    Widget pair(Widget a, Widget b) => IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(child: a),
+            const SizedBox(width: 8),
+            Expanded(child: b),
+          ]),
+        );
     return GamePanel(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         SectionTitle(app.t('shopT').replaceAll('{n}', '${app.shards}')),
         const SizedBox(height: 10),
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          for (var bi = 0; bi < kBoosters.length; bi++) ...[
-            if (bi > 0) const SizedBox(width: 7),
-            Expanded(child: _shopBooster(app, bi)),
-          ],
-          const SizedBox(width: 7),
-          Expanded(child: _shopHint(app)),
-        ]),
+        pair(_shopBooster(app, 0), _shopBooster(app, 1)),
+        const SizedBox(height: 8),
+        pair(_shopBooster(app, 2), _shopHint(app)),
         if (app.adShards < 3) ...[
           const SizedBox(height: 12),
           Pressable(
@@ -206,8 +210,10 @@ class HubScreen extends StatelessWidget {
     );
   }
 
-  /// Карточка товара. Если осколков не хватает и доступен ролик —
-  /// ВМЕСТО цены показывается кнопка «за рекламу».
+  /// Карточка товара: иконка и запас сверху, полное название и полное
+  /// описание (ничего не обрезается), внизу — цена во всю ширину.
+  /// Если осколков не хватает и доступен ролик — ВМЕСТО цены кнопка
+  /// «за рекламу».
   Widget _shopCard({
     required bool can,
     required VoidCallback onTap,
@@ -221,75 +227,103 @@ class HubScreen extends StatelessWidget {
     return Pressable(
       onTap: onAdTap ?? onTap,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(6, 14, 6, 12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         decoration: BoxDecoration(
           color: const Color(0x0D78A0FF),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+              color: onAdTap != null
+                  ? const Color(0x40FFD400)
+                  : (can ? const Color(0x3300E5FF) : Pal.line)),
         ),
-        child: Stack(children: [
-          Positioned(
-            right: 2,
-            top: -4,
-            child: Text(count,
-                style: const TextStyle(
-                    fontFamily: Fonts.disp,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 10,
-                    color: Pal.cyan)),
-          ),
-          Column(children: [
-            Opacity(opacity: can || onAdTap != null ? 1 : .55, child: icon),
-            const SizedBox(height: 8),
-            Text(name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontFamily: Fonts.mono, fontSize: 10, color: Pal.text)),
-            const SizedBox(height: 3),
-            SizedBox(
-              height: 26,
-              child: Text(desc,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontFamily: Fonts.mono, fontSize: 8, height: 1.3, color: Pal.faint)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0x12121A2E),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Pal.line),
+              ),
+              child: Opacity(opacity: can || onAdTap != null ? 1 : .55, child: icon),
             ),
-            const SizedBox(height: 6),
-            if (onAdTap == null)
-              Opacity(
-                opacity: can ? 1 : .5,
+            const Spacer(),
+            // Запас в инвентаре.
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0x1200E5FF),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text('×$count',
+                  style: const TextStyle(
+                      fontFamily: Fonts.disp,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                      color: Pal.cyan)),
+            ),
+          ]),
+          const SizedBox(height: 9),
+          Text(name,
+              style: const TextStyle(
+                  fontFamily: Fonts.mono,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: Pal.text)),
+          const SizedBox(height: 4),
+          Text(desc,
+              style: const TextStyle(
+                  fontFamily: Fonts.mono, fontSize: 9.5, height: 1.45, color: Pal.bodyDim)),
+          const SizedBox(height: 10),
+          const Spacer(),
+          if (onAdTap == null)
+            Opacity(
+              opacity: can ? 1 : .5,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: can ? const Color(0x1500E5FF) : Colors.transparent,
+                  border: Border.all(
+                      color: can ? const Color(0x7300E5FF) : Pal.line),
+                  borderRadius: BorderRadius.circular(999),
+                ),
                 child: IconText(price,
                     style: const TextStyle(
                         fontFamily: Fonts.disp,
                         fontWeight: FontWeight.w700,
-                        fontSize: 11,
+                        fontSize: 12,
                         color: Pal.cyan)),
-              )
-            else
-              // Осколков не хватает — предмет отдаётся за ролик.
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0x1CFFD400),
-                  border: Border.all(color: const Color(0x66FFD400)),
-                  borderRadius: BorderRadius.circular(999),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x24FFD400), blurRadius: 12),
-                  ],
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                  GameIcon('tv', size: 12, color: Pal.yellow),
-                  SizedBox(width: 4),
-                  Text('+1',
-                      style: TextStyle(
-                          fontFamily: Fonts.disp,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 10,
-                          color: Pal.yellow)),
-                ]),
               ),
-          ]),
+            )
+          else
+            // Осколков не хватает — предмет отдаётся за ролик.
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0x1CFFD400),
+                border: Border.all(color: const Color(0x66FFD400)),
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x24FFD400), blurRadius: 12),
+                ],
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                GameIcon('tv', size: 13, color: Pal.yellow),
+                SizedBox(width: 5),
+                Text('+1',
+                    style: TextStyle(
+                        fontFamily: Fonts.disp,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        color: Pal.yellow)),
+              ]),
+            ),
         ]),
       ),
     );
@@ -415,22 +449,49 @@ class _GoalsPanel extends StatelessWidget {
           ],
         ]),
         const SizedBox(height: 10),
-        for (var i = 0; i < 3; i++) _goalRow(i, names.length > i ? names[i] : ''),
+        for (var i = 0; i < 3; i++)
+          _goalRow(
+            name: names.length > i ? names[i] : '',
+            done: app.gDone[i],
+            progress: app.gp[i],
+            target: kGoals[i],
+            reward: 1,
+          ),
+        // Цели недели: крупнее и жирнее наградой, сбрасываются по
+        // понедельникам.
+        const SizedBox(height: 4),
+        SectionTitle(app.lt('wkT')),
+        const SizedBox(height: 10),
+        for (var i = 0; i < 3; i++)
+          _goalRow(
+            name: app.lt('wk$i'),
+            done: app.wgDone[i],
+            progress: app.wgp[i],
+            target: kWeekGoals[i],
+            reward: kWeekRewards[i],
+            accent: Pal.yellow,
+          ),
       ]),
     );
   }
 
-  Widget _goalRow(int i, String name) {
-    final done = app.gDone[i];
-    final k = (app.gp[i] / kGoals[i]).clamp(0.0, 1.0);
+  Widget _goalRow({
+    required String name,
+    required bool done,
+    required int progress,
+    required int target,
+    required int reward,
+    Color accent = Pal.cyan,
+  }) {
+    final k = (progress / target).clamp(0.0, 1.0);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(children: [
         SizedBox(
-          width: 16,
+          width: 20,
           child: done
               ? const Glyph(GlyphKind.check, size: 14, color: Pal.green)
-              : Text('${app.gp[i]}',
+              : Text('$progress',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                       fontFamily: Fonts.mono, fontSize: 9, color: Pal.dim)),
@@ -458,7 +519,7 @@ class _GoalsPanel extends StatelessWidget {
                     value: v,
                     backgroundColor: Pal.bg,
                     valueColor: AlwaysStoppedAnimation(
-                        done ? Pal.green : Pal.cyan),
+                        done ? Pal.green : accent),
                   ),
                 ),
               ),
@@ -467,14 +528,14 @@ class _GoalsPanel extends StatelessWidget {
         ),
         const SizedBox(width: 9),
         Row(mainAxisSize: MainAxisSize.min, children: [
-          Text('+1',
+          Text('+$reward',
               style: TextStyle(
                   fontFamily: Fonts.disp,
                   fontWeight: FontWeight.w700,
                   fontSize: 10,
-                  color: done ? Pal.faint : Pal.cyan)),
+                  color: done ? Pal.faint : accent)),
           const SizedBox(width: 2),
-          ShardIcon(size: 8, color: done ? Pal.faint : Pal.cyan),
+          ShardIcon(size: 8, color: done ? Pal.faint : accent),
         ]),
       ]),
     );

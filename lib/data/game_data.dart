@@ -14,11 +14,17 @@ class GameTheme {
 
 // Цены тем выросли вместе с редкостью осколков: тема — статусная
 // покупка на недели игры, а не на два дня.
+// ВАЖНО: новые темы добавляются только В КОНЕЦ — индекс темы лежит
+// в сейве ('th' и список 'ow').
 const kThemes = [
   GameTheme('Неон', 'Neon', 0, Color(0xFFFF2ED1), Color(0xFF00E5FF), Color(0xFF00E676), Color(0xFFFFD400)),
   GameTheme('Плазма', 'Plasma', 14, Color(0xFFB06CFF), Color(0xFFFF6BD6), Color(0xFF7CE0FF), Color(0xFFFFB86B)),
   GameTheme('Изумруд', 'Emerald', 22, Color(0xFFFF7A59), Color(0xFF39E0B0), Color(0xFF9BE870), Color(0xFFFFE066)),
   GameTheme('Янтарь', 'Amber', 30, Color(0xFFFF5E5B), Color(0xFFFFC24D), Color(0xFF8FD96B), Color(0xFFFFE9A8)),
+  GameTheme('Сакура', 'Sakura', 18, Color(0xFFFF6FA8), Color(0xFFFFB3D9), Color(0xFF9BE8B0), Color(0xFFFFE9C7)),
+  GameTheme('Индиго', 'Indigo', 24, Color(0xFF9C6BFF), Color(0xFF6E8BFF), Color(0xFF64FFDA), Color(0xFFFFD740)),
+  GameTheme('Закат', 'Sunset', 34, Color(0xFFFF4D6D), Color(0xFFFF9E45), Color(0xFFFFD166), Color(0xFFFFF0B3)),
+  GameTheme('Матрица', 'Matrix', 40, Color(0xFF5EFF43), Color(0xFF00E5A0), Color(0xFF7CFF9B), Color(0xFFD8FFB0)),
 ];
 
 /// Палитры кабеля: [base, mid, top, highlight].
@@ -55,6 +61,10 @@ const kCableMats = [
   CableMat(1.20, 0, texMode: 'core', texWidth: .30, texOpacity: 1), // Плазма — жила в шланге
   CableMat(.94, .12, texMode: 'weave', texWidth: .9, texDash: [2.5, 5.5], texOpacity: .34), // Изумруд — оплётка
   CableMat(1.08, .85, texMode: 'twist', texWidth: .66, texDash: [6, 10], texOpacity: .5), // Янтарь — витой шнур
+  CableMat(.9, .75), // Сакура — тонкий лакированный шнур
+  CableMat(1.14, .08, texMode: 'core', texWidth: .38, texOpacity: .85), // Индиго — толстая жила
+  CableMat(1.04, .6, texMode: 'twist', texWidth: .58, texDash: [5, 9], texOpacity: .42), // Закат — витой
+  CableMat(.96, .2, texMode: 'weave', texWidth: .9, texDash: [2, 6], texOpacity: .4), // Матрица — сетка-оплётка
 ];
 
 /// Бустеры: ключ, иконка, цена в осколках.
@@ -90,3 +100,8 @@ const kSceneBadEdges = [
 
 /// Дневные цели: победы, победы без подсказок, задачи.
 const kGoals = [10, 3, 2];
+
+/// Цели недели: связи, задачи, дни с полным комплектом целей.
+/// Сбрасываются по понедельникам; награды крупнее дневных.
+const kWeekGoals = [25, 10, 3];
+const kWeekRewards = [3, 3, 4];
