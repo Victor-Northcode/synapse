@@ -46,6 +46,7 @@ class SettingsScreen extends StatelessWidget {
         ),
         StaggerIn(index: 0, child: _switchRow(app.lt('musicL'), app.musicOn, app.setMusic)),
         StaggerIn(index: 1, child: _switchRow(app.t('sound'), app.soundOn, app.setSound)),
+        if (app.soundOn) StaggerIn(index: 1, child: _volumeRow(app)),
         StaggerIn(index: 2, child: _switchRow(app.t('vibro'), app.vibroOn, app.setVibro)),
         StaggerIn(
             index: 3, child: _switchRow(app.t('push'), app.pushOn, (v) => app.setPush(v))),
@@ -98,6 +99,61 @@ class SettingsScreen extends StatelessWidget {
                   color: Pal.text)),
         ),
         _NeonSwitch(value: value, onChanged: onChanged),
+      ]),
+    );
+  }
+
+  /// Громкость звуков: 50%–200%. Всё, что выше 100%, зашивается в синтез
+  /// сэмплов — телефонный динамик прощает, клиппинг отрезается в WAV.
+  Widget _volumeRow(AppState app) {
+    return Container(
+      padding: const EdgeInsets.only(top: 2, bottom: 6),
+      decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Pal.line))),
+      child: Row(children: [
+        Expanded(
+          child: Text(app.lt('volL'),
+              style: const TextStyle(
+                  fontFamily: Fonts.mono,
+                  fontSize: 12,
+                  letterSpacing: .7,
+                  color: Pal.text)),
+        ),
+        SizedBox(
+          width: 168,
+          child: SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 3,
+              activeTrackColor: Pal.cyan,
+              inactiveTrackColor: Pal.line,
+              thumbColor: Pal.cyan,
+              overlayColor: const Color(0x2400E5FF),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+            ),
+            child: Slider(
+              value: app.soundVol,
+              min: .5,
+              max: 2,
+              divisions: 6,
+              onChanged: (v) => app.setSoundVolume(v),
+              onChangeEnd: (v) {
+                Haptics.instance.snap();
+                app.setSoundVolume(v, commit: true);
+              },
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 44,
+          child: Text('${(app.soundVol * 100).round()}%',
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                  fontFamily: Fonts.disp,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                  color: Pal.cyan)),
+        ),
       ]),
     );
   }

@@ -350,7 +350,7 @@ class PlayState extends ChangeNotifier {
     }
     dragIdx = i;
     _dragOff = [nodes[i][0] - px, nodes[i][1] - py];
-    GameAudio.instance.tone(420, .05, 'sine', .03);
+    GameAudio.instance.tone(420, .06, 'sine', .055);
     Haptics.instance.grab();
     notifyListeners();
     return true;

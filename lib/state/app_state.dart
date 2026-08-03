@@ -79,6 +79,9 @@ class AppState extends ChangeNotifier {
   List<bool> done = [];
   int hintBought = 0;
   bool soundOn = true;
+
+  /// Громкость звуков: 0.5–2.0 (до 200%).
+  double soundVol = 1.0;
   bool vibroOn = true;
   bool pushOn = true;
   bool introSeen = false;
@@ -236,6 +239,7 @@ class AppState extends ChangeNotifier {
         }
       }
       soundOn = sv['so'] != false;
+      soundVol = ((sv['vol'] as num?)?.toDouble() ?? 1.0).clamp(0.5, 2.0);
       vibroOn = sv['vi'] != false;
       pushOn = sv['pu'] != false;
       introSeen = sv['i'] == true;
@@ -253,6 +257,7 @@ class AppState extends ChangeNotifier {
       save();
     }
     GameAudio.instance.enabled = soundOn;
+    GameAudio.instance.volume = soundVol;
     GameAudio.instance.setMusicEnabled(musicOn);
     Haptics.instance.enabled = vibroOn;
     buildChapter();
@@ -289,6 +294,7 @@ class AppState extends ChangeNotifier {
       'dn': done,
       'hbq': hintBought,
       'so': soundOn,
+      'vol': soundVol,
       'vi': vibroOn,
       'pu': pushOn,
       'i': introSeen,
@@ -692,6 +698,18 @@ class AppState extends ChangeNotifier {
     GameAudio.instance.enabled = v;
     save();
     if (v) GameAudio.instance.tone(880, .1, 'square', .05);
+    notifyListeners();
+  }
+
+  /// Громкость звуков (0.5–2.0). [commit] — конец жеста: сохраняем и
+  /// даём услышать результат контрольным щелчком.
+  void setSoundVolume(double v, {bool commit = false}) {
+    soundVol = v.clamp(0.5, 2.0);
+    GameAudio.instance.volume = soundVol;
+    if (commit) {
+      save();
+      GameAudio.instance.tone(660, .1, 'triangle', .09);
+    }
     notifyListeners();
   }
 

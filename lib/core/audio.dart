@@ -21,6 +21,20 @@ class GameAudio {
 
   bool enabled = true;
 
+  /// Общая громкость звуков: 0.5–2.0 (до 200%). Усиление выше 100%
+  /// зашивается прямо в сэмплы при синтезе — платформенный плеер выше
+  /// единицы не умеет.
+  double _volume = 1;
+  double get volume => _volume;
+  set volume(double v) {
+    _volume = v.clamp(.5, 2.0);
+    for (final p in _musicPair) {
+      p.setVolume(_musicVol).ignore();
+    }
+  }
+
+  double get _musicVol => (.5 * _volume).clamp(0.0, 1.0);
+
   static const _rate = 22050;
   final Map<String, Uint8List> _cache = {};
   final List<AudioPlayer> _pool = [];
@@ -149,7 +163,7 @@ class GameAudio {
       _musicTimer?.cancel();
       for (final p in _musicPair) {
         await p.stop();
-        await p.setVolume(.5);
+        await p.setVolume(_musicVol);
       }
       await _musicPair[0].play(BytesSource(wav, mimeType: 'audio/wav'));
       _musicNext = 1;
@@ -176,7 +190,7 @@ class GameAudio {
     try {
       for (var v = 4; v >= 0; v--) {
         for (final p in _musicPair) {
-          await p.setVolume(.5 * v / 5);
+          await p.setVolume(_musicVol * v / 5);
         }
         await Future<void>.delayed(const Duration(milliseconds: 55));
       }
@@ -259,10 +273,12 @@ class GameAudio {
   }
 
   /// Осциллятор с экспоненциальным затуханием, как в WebAudio-версии.
+  /// Итоговая громкость = vol × общий регулятор (до 200%).
   void tone(double freq, [double dur = .12, String type = 'square', double vol = .05]) {
     if (!enabled) return;
-    final key = 't$freq|$dur|$type|$vol';
-    final wav = _cache.putIfAbsent(key, () => _synthTone(freq, dur, type, vol));
+    final v = (vol * _volume * 1000).round() / 1000;
+    final key = 't$freq|$dur|$type|$v';
+    final wav = _cache.putIfAbsent(key, () => _synthTone(freq, dur, type, v));
     _play(wav);
   }
 
@@ -279,7 +295,8 @@ class GameAudio {
   /// Шумовой всплеск взрыва: белый шум через полосовой фильтр 800 Гц.
   void noiseBurst() {
     if (!enabled) return;
-    final wav = _cache.putIfAbsent('noise', _synthNoise);
+    final v = (_volume * 100).round();
+    final wav = _cache.putIfAbsent('noise|$v', () => _synthNoise(_volume));
     _play(wav);
   }
 
@@ -295,8 +312,9 @@ class GameAudio {
     final oct = idx ~/ pent.length;
     final f0 =
         294 * math.pow(2, (pent[idx % pent.length] + 12 * oct) / 12).toDouble();
-    tone(f0, .10, 'triangle', .055);
-    tone(f0 * 1.5, .07, 'sine', .018 + oct * 0.006);
+    // Защёлкивание — главный звук игры, он обязан быть слышен.
+    tone(f0, .11, 'triangle', .095);
+    tone(f0 * 1.5, .08, 'sine', .034 + oct * 0.008);
   }
 
   Uint8List _synthTone(double freq, double dur, String type, double vol) {
@@ -324,7 +342,7 @@ class GameAudio {
     return _wav(data);
   }
 
-  Uint8List _synthNoise() {
+  Uint8List _synthNoise(double scale) {
     final n = (_rate * 0.35).round();
     final rnd = math.Random();
     final data = Float64List(n);
@@ -339,7 +357,7 @@ class GameAudio {
       final x0 = (rnd.nextDouble() * 2 - 1) * math.pow(1 - i / n, 2.2);
       final y0 = (b0 / a0) * x0 + (b1 / a0) * x1 + (b2 / a0) * x2 - (a1 / a0) * y1 - (a2 / a0) * y2;
       x2 = x1; x1 = x0; y2 = y1; y1 = y0;
-      data[i] = y0 * 0.12 * 4; // компенсация ослабления фильтра
+      data[i] = y0 * 0.12 * 4 * scale; // компенсация ослабления фильтра
     }
     return _wav(data);
   }
