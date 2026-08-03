@@ -82,10 +82,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1000));
     await shot('04-hub');
 
-    // Склад.
+    // Склад: два pump — первый запускает анимацию перехода вкладки,
+    // второй дорисовывает её до конца.
     await tester.tap(find.text('СКЛАД'));
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 500));
     await shot('05-shop');
+
+    // Топ игроков.
+    await tester.tap(find.text('ТОП'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 900));
+    await shot('10-top');
   });
 
   testWidgets('экран результата', skip: !autoUpdateGoldenFiles, (tester) async {

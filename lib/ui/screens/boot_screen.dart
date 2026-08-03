@@ -48,8 +48,29 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
           opacity: 1 - leave,
           child: Container(
             decoration: const BoxDecoration(gradient: Pal.fieldGradient),
+            // Stack по умолчанию прижимает нецентрированных детей к левому
+            // верхнему углу — колонка обязана растягиваться на весь экран,
+            // иначе вся анимация «уезжает влево».
             child: Stack(children: [
-              Column(
+              // Мягкое дыхание фона за штекером.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: const Alignment(0, -0.12),
+                        radius: .9,
+                        colors: [
+                          Pal.mag.withValues(alpha: .06 + .05 * drop),
+                          const Color(0x00000000),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SizedBox(
@@ -166,6 +187,7 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
                             color: Pal.dim)),
                   ),
                 ],
+                ),
               ),
               Positioned(
                 left: 0,

@@ -24,8 +24,12 @@ void main() {
     expect(play.result!.win, isTrue);
     expect(app.level, 2);
     expect(app.tokens, greaterThan(0));
-    expect(app.shards, greaterThan(0), reason: 'осколок за прохождение без подсказок');
+    // Осколки — редкая валюта: обычная победа их НЕ даёт
+    // (только мастерство на «очень сложных» связях).
+    expect(app.shards, 0, reason: 'обычная победа не платит осколками');
     expect(app.gp[0], 1);
+    expect(app.totalWins, 1, reason: 'рекорды ведутся при каждой победе');
+    expect(app.bestLevel, 1);
     play.dispose();
   });
 

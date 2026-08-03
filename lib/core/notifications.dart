@@ -3,16 +3,17 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
-/// Локальные напоминания — порт модуля PUSH.
+/// Локальные напоминания — порт модуля PUSH, расширенный до недели.
 ///
-/// Правила сохранены: не больше одного уведомления в сутки, только в 19:00
-/// по местному времени, при каждом запуске всё снимается и ставится заново,
-/// разрешение спрашивается после первой пройденной связи.
+/// Правила: не больше одного уведомления в сутки, в 19:00 по местному
+/// времени, при каждом запуске всё снимается и ставится заново на 7 дней
+/// вперёд с разными текстами. Разрешение спрашивается после первой
+/// пройденной связи.
 class Push {
   Push._();
   static final Push instance = Push._();
 
-  static const _ids = [9101, 9102, 9103];
+  static const _ids = [9101, 9102, 9103, 9104, 9105, 9106, 9107];
   static const _hour = 19;
 
   final _plugin = FlutterLocalNotificationsPlugin();
@@ -90,29 +91,36 @@ class Push {
     return tz.TZDateTime.from(t.toUtc(), tz.UTC);
   }
 
-  /// [entries] — до трёх пар (title, body) с шагом 1/3/7 дней.
+  /// [entries] — до семи пар (title, body): по одному уведомлению в день
+  /// на неделю вперёд. Тексты разные, чтобы напоминания не приедались;
+  /// длинное тело раскрывается на Android в BigTextStyle.
   Future<void> reschedule(List<(String, String)> entries) async {
     try {
       await init();
       if (!await _granted()) return;
       await clear();
-      const days = [1, 3, 7];
-      const details = NotificationDetails(
-        android: AndroidNotificationDetails(
-          'synapse_nudge',
-          'Reminders',
-          channelDescription: 'Daily reminder to return to the game',
-          importance: Importance.defaultImportance,
-          priority: Priority.defaultPriority,
-        ),
-        iOS: DarwinNotificationDetails(),
-      );
-      for (var i = 0; i < entries.length && i < 3; i++) {
+      for (var i = 0; i < entries.length && i < _ids.length; i++) {
+        final details = NotificationDetails(
+          android: AndroidNotificationDetails(
+            'synapse_nudge',
+            'Daily reminders',
+            channelDescription: 'Daily reminder to return to the game',
+            importance: Importance.high,
+            priority: Priority.high,
+            styleInformation: BigTextStyleInformation(entries[i].$2),
+            category: AndroidNotificationCategory.reminder,
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentSound: true,
+            interruptionLevel: InterruptionLevel.active,
+          ),
+        );
         await _plugin.zonedSchedule(
           _ids[i],
           entries[i].$1,
           entries[i].$2,
-          _at(days[i]),
+          _at(i + 1),
           details,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         );

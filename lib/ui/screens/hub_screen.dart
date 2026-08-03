@@ -3,240 +3,211 @@ import 'package:provider/provider.dart';
 
 import '../../core/palette.dart';
 import '../../data/game_data.dart';
+import '../../data/upgrade_data.dart';
 import '../../game/level.dart';
 import '../../state/app_state.dart';
 import '../layout.dart';
 import '../widgets/common.dart';
 
-/// Хаб: карточка модели, вкладки «стойка»/«склад».
-class HubScreen extends StatefulWidget {
-  final VoidCallback onPlay;
-  const HubScreen({super.key, required this.onPlay});
+/// Вкладка хаба, выбранная в нижнем меню.
+enum HubPane { journal, supply }
 
-  @override
-  State<HubScreen> createState() => _HubScreenState();
-}
-
-class _HubScreenState extends State<HubScreen> {
-  int tab = 0;
+/// Хаб: «журнал» (карточка модели, связь, цели дня, задачи датацентра)
+/// и «склад» (бустеры, мастерская, темы).
+class HubScreen extends StatelessWidget {
+  final HubPane pane;
+  final VoidCallback? onPlay;
+  const HubScreen({super.key, required this.pane, this.onPlay});
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final l = Layout.of(context);
 
-    final tabs = Row(children: [
-      Expanded(child: _tabButton(app.t('tab0'), 0)),
-      const SizedBox(width: 10),
-      Expanded(child: _tabButton(app.t('tab2'), 1)),
-    ]);
-    final pane = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 260),
-      switchInCurve: Curves.easeOutCubic,
-      transitionBuilder: (child, anim) => FadeTransition(
-        opacity: anim,
-        child: SlideTransition(
-          position: Tween(begin: const Offset(0, .03), end: Offset.zero).animate(anim),
-          child: child,
-        ),
-      ),
-      child: Column(
-        key: ValueKey(tab),
-        children: tab == 0 ? _pane0(app) : _pane1(app),
-      ),
-    );
+    if (pane == HubPane.journal) {
+      final left = <Widget>[
+        StaggerIn(index: 0, child: _HubCard(app: app)),
+        const SizedBox(height: 16),
+        ..._playBlock(app),
+      ];
+      final right = <Widget>[
+        StaggerIn(index: 2, child: _GoalsPanel(app: app)),
+        const SizedBox(height: 12),
+        StaggerIn(index: 3, child: _tasksPanel(app)),
+      ];
 
-    // Альбом на планшете: слева карточка модели и вкладки, справа —
-    // содержимое вкладки со своей прокруткой.
-    if (l.twoColumn) {
-      // Колонки центрируются по вертикали, но прокручиваются, если
-      // контента больше высоты экрана.
-      Widget col(Widget child) => Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: child,
-            ),
-          );
-      return Padding(
-        padding: EdgeInsets.fromLTRB(l.gutter, 4, l.gutter, l.gutter),
-        child: Row(children: [
-          Expanded(
-            flex: 5,
-            child: col(Column(children: [
-              _HubCard(app: app),
-              const SizedBox(height: 16),
-              tabs,
-            ])),
-          ),
-          SizedBox(width: l.gutter),
-          Expanded(flex: 6, child: col(pane)),
-        ]),
+      // Альбом на планшете: слева карточка модели и кнопка связи,
+      // справа — цели и задачи со своей прокруткой.
+      if (l.twoColumn) {
+        Widget col(List<Widget> children) => Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(children: children),
+              ),
+            );
+        return Padding(
+          padding: EdgeInsets.fromLTRB(l.gutter, 4, l.gutter, l.gutter),
+          child: Row(children: [
+            Expanded(flex: 5, child: col(left)),
+            SizedBox(width: l.gutter),
+            Expanded(flex: 6, child: col(right)),
+          ]),
+        );
+      }
+
+      return ContentColumn(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(l.gutter, 8, l.gutter, 24),
+          children: [...left, const SizedBox(height: 16), ...right],
+        ),
       );
     }
 
+    // ---- склад ----
+    final supply = <Widget>[
+      StaggerIn(index: 0, child: _shopPanel(app)),
+      const SizedBox(height: 12),
+      StaggerIn(index: 1, child: _WorkshopPanel(app: app)),
+      const SizedBox(height: 12),
+      StaggerIn(index: 2, child: _themesPanel(app)),
+    ];
     return ContentColumn(
       child: ListView(
         padding: EdgeInsets.fromLTRB(l.gutter, 8, l.gutter, 24),
-        children: [
-          _HubCard(app: app),
-          const SizedBox(height: 16),
-          tabs,
-          const SizedBox(height: 14),
-          pane,
-        ],
+        children: supply,
       ),
     );
   }
 
-  Widget _tabButton(String label, int i) {
-    final on = tab == i;
-    return Pressable(
-      onTap: () => setState(() => tab = i),
-      child: Container(
-        height: 68,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: on ? Pal.mag : const Color(0x1200E5FF),
-          border: Border.all(color: on ? Colors.transparent : const Color(0x5200E5FF)),
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: on
-              ? const [BoxShadow(color: Color(0x6BFF2ED1), blurRadius: 46)]
-              : null,
-        ),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontFamily: Fonts.disp,
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-            letterSpacing: 2.2,
-            color: on ? const Color(0xFF1A0512) : Pal.cyan,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ---------- вкладка «стойка» ----------
-  List<Widget> _pane0(AppState app) {
+  // ---------- журнал: связь и задачи ----------
+  List<Widget> _playBlock(AppState app) {
     final pk = lvlKind(app.level);
     final btnColor = pk == 2 ? Pal.superRed : (pk == 1 ? Pal.hardTeal : Pal.mag);
     final btnText = pk == 2
         ? const Color(0xFF2A0D0A)
         : (pk == 1 ? const Color(0xFF0C2320) : const Color(0xFF1A0512));
     return [
-      PillButton(
-        onTap: widget.onPlay,
-        pulse: true,
-        color: btnColor,
-        textColor: btnText,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(app.t('play').replaceAll('{n}', '${app.level}'),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          if (pk != 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 5),
-              child: Text(
-                pk == 2 ? app.t('kSuper') : (pk == 1 ? app.t('kHard') : app.t('kEasy')),
-                style: TextStyle(
-                    fontFamily: Fonts.mono,
-                    fontSize: 10,
-                    letterSpacing: 1.4,
-                    color: btnText.withValues(alpha: .65)),
+      StaggerIn(
+        index: 1,
+        child: PillButton(
+          onTap: onPlay,
+          pulse: true,
+          color: btnColor,
+          textColor: btnText,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(app.t('play').replaceAll('{n}', '${app.level}'),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            if (pk != 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: Text(
+                  pk == 2 ? app.t('kSuper') : (pk == 1 ? app.t('kHard') : app.t('kEasy')),
+                  style: TextStyle(
+                      fontFamily: Fonts.mono,
+                      fontSize: 10,
+                      letterSpacing: 1.4,
+                      color: btnText.withValues(alpha: .65)),
+                ),
               ),
-            ),
-        ]),
+          ]),
+        ),
       ),
       const SizedBox(height: 11),
       IconText(app.nextGoalLine(),
           style: const TextStyle(
               fontFamily: Fonts.mono, fontSize: 11.5, height: 1.45, color: Pal.yellow)),
-      const SizedBox(height: 18),
-      GamePanel(
-        child: Column(children: [
-          Text(
-            app.curDay < app.days
-                ? '${app.t('dc')} · ${app.t('day').replaceAll('{n}', '${app.curDay + 1}')} — ${app.dayNames[app.curDay]}'
-                : app.t('dc'),
+    ];
+  }
+
+  Widget _tasksPanel(AppState app) {
+    return GamePanel(
+      child: Column(children: [
+        Text(
+          app.curDay < app.days
+              ? '${app.t('dc')} · ${app.t('day').replaceAll('{n}', '${app.curDay + 1}')} — ${app.dayNames[app.curDay]}'
+              : app.t('dc'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+              fontFamily: Fonts.disp,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+              letterSpacing: .6,
+              color: Pal.text),
+        ),
+        const SizedBox(height: 12),
+        for (var i = 0; i < app.tasks.length; i++)
+          if (app.tasks[i].day == app.curDay) _TaskRow(app: app, index: i),
+        const SizedBox(height: 11),
+        Text(app.t('dcHint'),
             textAlign: TextAlign.center,
             style: const TextStyle(
-                fontFamily: Fonts.disp,
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
-                letterSpacing: .6,
-                color: Pal.text),
-          ),
-          const SizedBox(height: 12),
-          for (var i = 0; i < app.tasks.length; i++)
-            if (app.tasks[i].day == app.curDay) _TaskRow(app: app, index: i),
-          const SizedBox(height: 11),
-          Text(app.t('dcHint'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontFamily: Fonts.mono, fontSize: 10, height: 1.4, color: Pal.dim)),
-        ]),
-      ),
-    ];
+                fontFamily: Fonts.mono, fontSize: 10, height: 1.4, color: Pal.dim)),
+      ]),
+    );
   }
 
-  // ---------- вкладка «склад» ----------
-  List<Widget> _pane1(AppState app) {
-    return [
-      GamePanel(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          SectionTitle(app.t('shopT').replaceAll('{n}', '${app.shards}')),
-          const SizedBox(height: 10),
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            for (var bi = 0; bi < kBoosters.length; bi++) ...[
-              if (bi > 0) const SizedBox(width: 7),
-              Expanded(child: _shopBooster(app, bi)),
-            ],
-            const SizedBox(width: 7),
-            Expanded(child: _shopHint(app)),
-          ]),
-          const SizedBox(height: 14),
-          SectionTitle(app.t('themesT')),
-          const SizedBox(height: 10),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 7,
-            crossAxisSpacing: 7,
-            childAspectRatio: 1.9,
-            children: [for (var ti = 0; ti < kThemes.length; ti++) _themeCard(app, ti)],
-          ),
-          if (app.adShards < 3) ...[
-            const SizedBox(height: 12),
-            Pressable(
-              onTap: app.watchAdForShards,
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 62),
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0x17FFD400),
-                  border: Border.all(color: const Color(0x61FFD400)),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: IconText(
-                  app.t('adShard').replaceAll('{n}', '${3 - app.adShards}'),
-                  style: const TextStyle(
-                      fontFamily: Fonts.disp,
-                      fontSize: 12,
-                      letterSpacing: 1.8,
-                      color: Pal.yellow),
-                ),
+  // ---------- склад: бустеры ----------
+  Widget _shopPanel(AppState app) {
+    return GamePanel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SectionTitle(app.t('shopT').replaceAll('{n}', '${app.shards}')),
+        const SizedBox(height: 10),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          for (var bi = 0; bi < kBoosters.length; bi++) ...[
+            if (bi > 0) const SizedBox(width: 7),
+            Expanded(child: _shopBooster(app, bi)),
+          ],
+          const SizedBox(width: 7),
+          Expanded(child: _shopHint(app)),
+        ]),
+        if (app.adShards < 3) ...[
+          const SizedBox(height: 12),
+          Pressable(
+            onTap: app.watchAdForShards,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 62),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: const Color(0x17FFD400),
+                border: Border.all(color: const Color(0x61FFD400)),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: IconText(
+                app.t('adShard').replaceAll('{n}', '${3 - app.adShards}'),
+                style: const TextStyle(
+                    fontFamily: Fonts.disp,
+                    fontSize: 12,
+                    letterSpacing: 1.8,
+                    color: Pal.yellow),
               ),
             ),
-          ],
-        ]),
-      ),
-    ];
+          ),
+        ],
+      ]),
+    );
   }
 
+  Widget _themesPanel(AppState app) {
+    return GamePanel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SectionTitle(app.t('themesT')),
+        const SizedBox(height: 10),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 7,
+          crossAxisSpacing: 7,
+          childAspectRatio: 1.9,
+          children: [for (var ti = 0; ti < kThemes.length; ti++) _themeCard(app, ti)],
+        ),
+      ]),
+    );
+  }
+
+  /// Карточка товара. Если осколков не хватает и доступен ролик —
+  /// ВМЕСТО цены показывается кнопка «за рекламу».
   Widget _shopCard({
     required bool can,
     required VoidCallback onTap,
@@ -248,7 +219,7 @@ class _HubScreenState extends State<HubScreen> {
     VoidCallback? onAdTap,
   }) {
     return Pressable(
-      onTap: onTap,
+      onTap: onAdTap ?? onTap,
       child: Container(
         padding: const EdgeInsets.fromLTRB(6, 14, 6, 12),
         decoration: BoxDecoration(
@@ -267,7 +238,7 @@ class _HubScreenState extends State<HubScreen> {
                     color: Pal.cyan)),
           ),
           Column(children: [
-            Opacity(opacity: can ? 1 : .55, child: icon),
+            Opacity(opacity: can || onAdTap != null ? 1 : .55, child: icon),
             const SizedBox(height: 8),
             Text(name,
                 maxLines: 1,
@@ -285,40 +256,39 @@ class _HubScreenState extends State<HubScreen> {
                       fontFamily: Fonts.mono, fontSize: 8, height: 1.3, color: Pal.faint)),
             ),
             const SizedBox(height: 6),
-            Opacity(
-              opacity: can ? 1 : .5,
-              child: IconText(price,
-                  style: const TextStyle(
-                      fontFamily: Fonts.disp,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
-                      color: Pal.cyan)),
-            ),
-            // Не хватает осколков — предмет можно получить за ролик.
-            if (onAdTap != null) ...[
-              const SizedBox(height: 7),
-              Pressable(
-                onTap: onAdTap,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0x1CFFD400),
-                    border: Border.all(color: const Color(0x66FFD400)),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                    GameIcon('tv', size: 12, color: Pal.yellow),
-                    SizedBox(width: 4),
-                    Text('+1',
-                        style: TextStyle(
-                            fontFamily: Fonts.disp,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 10,
-                            color: Pal.yellow)),
-                  ]),
+            if (onAdTap == null)
+              Opacity(
+                opacity: can ? 1 : .5,
+                child: IconText(price,
+                    style: const TextStyle(
+                        fontFamily: Fonts.disp,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        color: Pal.cyan)),
+              )
+            else
+              // Осколков не хватает — предмет отдаётся за ролик.
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0x1CFFD400),
+                  border: Border.all(color: const Color(0x66FFD400)),
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x24FFD400), blurRadius: 12),
+                  ],
                 ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                  GameIcon('tv', size: 12, color: Pal.yellow),
+                  SizedBox(width: 4),
+                  Text('+1',
+                      style: TextStyle(
+                          fontFamily: Fonts.disp,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10,
+                          color: Pal.yellow)),
+                ]),
               ),
-            ],
           ]),
         ]),
       ),
@@ -405,6 +375,230 @@ class _HubScreenState extends State<HubScreen> {
                 ),
               ),
           ]),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Цели дня: три полоски прогресса и серия. Раньше цели жили только в
+/// коде — игрок их не видел; теперь мотивация на виду.
+class _GoalsPanel extends StatelessWidget {
+  final AppState app;
+  const _GoalsPanel({required this.app});
+
+  @override
+  Widget build(BuildContext context) {
+    final names = app.tl('gn');
+    return GamePanel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(child: SectionTitle(app.t('goalsT'))),
+          if (app.streak > 0) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0x1FFF2ED1),
+                border: Border.all(color: const Color(0x66FF2ED1)),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                app.t('streakN').replaceAll('{d}', '${app.streak}'),
+                style: const TextStyle(
+                    fontFamily: Fonts.mono,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: Pal.mag),
+              ),
+            ),
+          ],
+        ]),
+        const SizedBox(height: 10),
+        for (var i = 0; i < 3; i++) _goalRow(i, names.length > i ? names[i] : ''),
+      ]),
+    );
+  }
+
+  Widget _goalRow(int i, String name) {
+    final done = app.gDone[i];
+    final k = (app.gp[i] / kGoals[i]).clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(children: [
+        SizedBox(
+          width: 16,
+          child: done
+              ? const Glyph(GlyphKind.check, size: 14, color: Pal.green)
+              : Text('${app.gp[i]}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontFamily: Fonts.mono, fontSize: 9, color: Pal.dim)),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontFamily: Fonts.mono,
+                    fontSize: 10.5,
+                    color: done ? Pal.green : Pal.text)),
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: SizedBox(
+                height: 4,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(end: done ? 1 : k),
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, v, _) => LinearProgressIndicator(
+                    value: v,
+                    backgroundColor: Pal.bg,
+                    valueColor: AlwaysStoppedAnimation(
+                        done ? Pal.green : Pal.cyan),
+                  ),
+                ),
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(width: 9),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('+1',
+              style: TextStyle(
+                  fontFamily: Fonts.disp,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 10,
+                  color: done ? Pal.faint : Pal.cyan)),
+          const SizedBox(width: 2),
+          ShardIcon(size: 8, color: done ? Pal.faint : Pal.cyan),
+        ]),
+      ]),
+    );
+  }
+}
+
+/// Мастерская: постоянные улучшения — главный сток осколков.
+class _WorkshopPanel extends StatelessWidget {
+  final AppState app;
+  const _WorkshopPanel({required this.app});
+
+  @override
+  Widget build(BuildContext context) {
+    return GamePanel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SectionTitle(app.lt('upT')),
+        const SizedBox(height: 4),
+        Text(app.lt('upHint'),
+            style: const TextStyle(
+                fontFamily: Fonts.mono, fontSize: 9, height: 1.4, color: Pal.dim)),
+        const SizedBox(height: 10),
+        for (final u in kUpgrades) _upgradeRow(u),
+      ]),
+    );
+  }
+
+  Widget _upgradeRow(Upgrade u) {
+    final lvl = app.upLevel(u.key);
+    final price = app.upPrice(u);
+    final maxed = price == null;
+    final can = !maxed && app.shards >= price;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+        decoration: BoxDecoration(
+          color: Pal.bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: maxed
+                  ? const Color(0x4D00E676)
+                  : (can ? const Color(0x8000E5FF) : Pal.line)),
+          boxShadow: can
+              ? const [BoxShadow(color: Color(0x2400E5FF), blurRadius: 12)]
+              : null,
+        ),
+        child: Row(children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0x0D78A0FF),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: GameIcon(u.icon,
+                size: 17, color: maxed ? Pal.green : Pal.text),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Flexible(
+                  child: Text(app.lt('up_${u.key}'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontFamily: Fonts.mono,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Pal.text)),
+                ),
+                const SizedBox(width: 7),
+                // Точки-уровни: сколько куплено из максимума.
+                for (var d = 0; d < u.maxLevel; d++)
+                  Container(
+                    width: 5,
+                    height: 5,
+                    margin: const EdgeInsetsDirectional.only(end: 3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: d < lvl ? Pal.green : Pal.dotOff,
+                    ),
+                  ),
+              ]),
+              const SizedBox(height: 3),
+              IconText(app.lt('up_${u.key}_d'),
+                  align: TextAlign.start,
+                  style: const TextStyle(
+                      fontFamily: Fonts.mono, fontSize: 9, height: 1.3, color: Pal.faint)),
+            ]),
+          ),
+          const SizedBox(width: 10),
+          maxed
+              ? Text(app.lt('upMax'),
+                  style: const TextStyle(
+                      fontFamily: Fonts.disp,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                      letterSpacing: 1.2,
+                      color: Pal.green))
+              : Pressable(
+                  onTap: () => app.buyUpgrade(u),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: can ? const Color(0x1A00E5FF) : Colors.transparent,
+                      border: Border.all(
+                          color: can ? const Color(0x8000E5FF) : Pal.line),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text('$price',
+                          style: TextStyle(
+                              fontFamily: Fonts.disp,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              color: can ? Pal.cyan : Pal.dim)),
+                      const SizedBox(width: 3),
+                      ShardIcon(size: 9, color: can ? Pal.cyan : Pal.dim),
+                    ]),
+                  ),
+                ),
         ]),
       ),
     );

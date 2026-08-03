@@ -12,11 +12,13 @@ class GameTheme {
   const GameTheme(this.nameRu, this.nameEn, this.cost, this.mag, this.cyan, this.green, this.yellow);
 }
 
+// Цены тем выросли вместе с редкостью осколков: тема — статусная
+// покупка на недели игры, а не на два дня.
 const kThemes = [
   GameTheme('Неон', 'Neon', 0, Color(0xFFFF2ED1), Color(0xFF00E5FF), Color(0xFF00E676), Color(0xFFFFD400)),
-  GameTheme('Плазма', 'Plasma', 8, Color(0xFFB06CFF), Color(0xFFFF6BD6), Color(0xFF7CE0FF), Color(0xFFFFB86B)),
-  GameTheme('Изумруд', 'Emerald', 12, Color(0xFFFF7A59), Color(0xFF39E0B0), Color(0xFF9BE870), Color(0xFFFFE066)),
-  GameTheme('Янтарь', 'Amber', 16, Color(0xFFFF5E5B), Color(0xFFFFC24D), Color(0xFF8FD96B), Color(0xFFFFE9A8)),
+  GameTheme('Плазма', 'Plasma', 14, Color(0xFFB06CFF), Color(0xFFFF6BD6), Color(0xFF7CE0FF), Color(0xFFFFB86B)),
+  GameTheme('Изумруд', 'Emerald', 22, Color(0xFFFF7A59), Color(0xFF39E0B0), Color(0xFF9BE870), Color(0xFFFFE066)),
+  GameTheme('Янтарь', 'Amber', 30, Color(0xFFFF5E5B), Color(0xFFFFC24D), Color(0xFF8FD96B), Color(0xFFFFE9A8)),
 ];
 
 /// Палитры кабеля: [base, mid, top, highlight].
@@ -64,9 +66,9 @@ class Booster {
 }
 
 const kBoosters = [
-  Booster('cut', 'cut', 4),
-  Booster('stab', 'timer', 3),
-  Booster('auto', 'target', 6),
+  Booster('cut', 'cut', 6),
+  Booster('stab', 'timer', 4),
+  Booster('auto', 'target', 8),
 ];
 
 /// Уровень первого появления каждой механики: level → тип препятствия.

@@ -5,6 +5,10 @@ import 'package:audioplayers/audioplayers.dart';
 
 /// Синтезатор звуков игры — порт tone()/chord()/noiseBurst() из WebAudio.
 /// Звук генерируется в PCM-WAV на лету и кэшируется по параметрам.
+///
+/// Аудио-сессия настроена «не мешать»: звуки игры МИКШИРУЮТСЯ с музыкой
+/// телефона (iOS ambient + mixWithOthers, Android focus none) — плеер
+/// пользователя не ставится на паузу.
 class GameAudio {
   GameAudio._();
   static final GameAudio instance = GameAudio._();
@@ -16,9 +20,36 @@ class GameAudio {
   final List<AudioPlayer> _pool = [];
   int _next = 0;
 
+  // ---- фоновая музыка ----
+  AudioPlayer? _music;
+  Uint8List? _musicWav;
+  bool _musicOn = false;
+  bool _musicPausedByLifecycle = false;
+
+  /// init() завершён — аудио-плагин доступен, музыку можно запускать.
+  /// До этого желание «музыка включена» просто запоминается: в тестах
+  /// init() не зовут, и плагин не трогается вовсе.
+  bool _ready = false;
+
   Future<void> init() async {
     try {
       AudioLogger.logLevel = AudioLogLevel.none;
+      // Глобальная аудио-сессия: не отбирать фокус у музыки телефона.
+      await AudioPlayer.global.setAudioContext(AudioContext(
+        android: const AudioContextAndroid(
+          contentType: AndroidContentType.sonification,
+          usageType: AndroidUsageType.game,
+          audioFocus: AndroidAudioFocus.none,
+        ),
+        iOS: AudioContextIOS(
+          category: AVAudioSessionCategory.ambient,
+          options: const {AVAudioSessionOptions.mixWithOthers},
+        ),
+      ));
+    } catch (_) {
+      // Среда без нативной аудио-сессии (веб, тесты) — просто продолжаем.
+    }
+    try {
       for (var i = 0; i < 6; i++) {
         final p = AudioPlayer();
         await p.setPlayerMode(PlayerMode.lowLatency);
@@ -28,6 +59,8 @@ class GameAudio {
     } catch (_) {
       _pool.clear(); // среда без аудио — игра работает молча
     }
+    _ready = true;
+    if (_musicOn) await _startMusic();
   }
 
   Future<void> _play(Uint8List wav) async {
@@ -38,6 +71,58 @@ class GameAudio {
       await p.stop();
       await p.play(BytesSource(wav, mimeType: 'audio/wav'));
     } catch (_) {}
+  }
+
+  // ---------- фоновая музыка ----------
+  /// Очень лёгкий эмбиент: два аккорда-пэда перетекают друг в друга,
+  /// поверх — редкие тихие «колокольчики». Петля бесшовная (все частоты
+  /// кратны длине петли), генерируется один раз и крутится в цикле.
+  Future<void> setMusicEnabled(bool on) async {
+    _musicOn = on;
+    if (!_ready) return; // применится, когда init() поднимет плагин
+    if (!on) {
+      try {
+        await _music?.stop();
+      } catch (_) {}
+      return;
+    }
+    await _startMusic();
+  }
+
+  Future<void> _startMusic() async {
+    try {
+      if (_music == null) {
+        final p = AudioPlayer();
+        await p.setReleaseMode(ReleaseMode.loop);
+        await p.setVolume(.5);
+        _music = p;
+      }
+      _musicWav ??= _synthMusic();
+      await _music!.stop();
+      await _music!.play(BytesSource(_musicWav!, mimeType: 'audio/wav'));
+    } catch (_) {
+      // Без аудио-движка музыки просто нет.
+    }
+  }
+
+  /// Пауза/возврат музыки вместе с приложением: игра не должна звучать
+  /// из фона.
+  Future<void> onAppPaused() async {
+    if (_musicOn && _music != null) {
+      _musicPausedByLifecycle = true;
+      try {
+        await _music!.pause();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> onAppResumed() async {
+    if (_musicOn && _musicPausedByLifecycle) {
+      _musicPausedByLifecycle = false;
+      try {
+        await _music!.resume();
+      } catch (_) {}
+    }
   }
 
   /// Осциллятор с экспоненциальным затуханием, как в WebAudio-версии.
@@ -65,11 +150,18 @@ class GameAudio {
     _play(wav);
   }
 
-  /// Пентатонический тон защёлкивания — порт формулы из endDrag().
-  void snapTone(int seq) {
+  /// Тон защёлкивания. Высота привязана к ПРОГРЕССУ уровня и идёт
+  /// строго на понижение: чем меньше пересечений осталось, тем ниже
+  /// и спокойнее нота. Никаких скачков «с начала» — шкала монотонная.
+  /// [progress] — доля распутанного (0 — начало, 1 — почти готово).
+  void snapTone(int seq, [double progress = 0]) {
     const pent = [0, 2, 4, 7, 9];
-    final oct = (seq ~/ pent.length) % 3;
-    final f0 = 294 * math.pow(2, (pent[seq % pent.length] + 12 * oct) / 12).toDouble();
+    const steps = 10;
+    final p = progress.clamp(0.0, 1.0);
+    final idx = ((1 - p) * (steps - 1)).round();
+    final oct = idx ~/ pent.length;
+    final f0 =
+        294 * math.pow(2, (pent[idx % pent.length] + 12 * oct) / 12).toDouble();
     tone(f0, .10, 'triangle', .055);
     tone(f0 * 1.5, .07, 'sine', .018 + oct * 0.006);
   }
@@ -115,6 +207,52 @@ class GameAudio {
       final y0 = (b0 / a0) * x0 + (b1 / a0) * x1 + (b2 / a0) * x2 - (a1 / a0) * y1 - (a2 / a0) * y2;
       x2 = x1; x1 = x0; y2 = y1; y1 = y0;
       data[i] = y0 * 0.12 * 4; // компенсация ослабления фильтра
+    }
+    return _wav(data);
+  }
+
+  /// 16-секундная бесшовная петля эмбиента.
+  Uint8List _synthMusic() {
+    const loop = 16.0;
+    final n = (_rate * loop).round();
+    final data = Float64List(n);
+
+    // Частота подгоняется к целому числу циклов на петлю — стык не щёлкает.
+    double snap(double f) => (f * loop).roundToDouble() / loop;
+
+    // Am(add9) → G(add9): спокойная пара без тяготения.
+    final chordA = [110.0, 220.0, 261.63, 329.63, 493.88].map(snap).toList();
+    final chordB = [98.0, 196.0, 246.94, 293.66, 440.0].map(snap).toList();
+    const amps = [.42, .26, .2, .16, .07];
+
+    for (var i = 0; i < n; i++) {
+      final t = i / _rate;
+      // Перекрёстное затухание аккордов: период равен петле.
+      final wA = .5 * (1 + math.cos(2 * math.pi * t / loop));
+      final wB = 1 - wA;
+      var s = 0.0;
+      for (var k = 0; k < chordA.length; k++) {
+        // Медленное «дыхание» каждого голоса (целое число циклов на петлю).
+        final lfoA = .75 + .25 * math.sin(2 * math.pi * (k + 1) * t / loop);
+        final lfoB = .75 + .25 * math.cos(2 * math.pi * (k + 2) * t / loop);
+        s += math.sin(2 * math.pi * chordA[k] * t) * amps[k] * wA * lfoA;
+        s += math.sin(2 * math.pi * chordB[k] * t) * amps[k] * wB * lfoB;
+      }
+      data[i] = s * .16;
+    }
+
+    // Редкие тихие «колокольчики» пентатоники поверх пэда.
+    const bells = [
+      (2.2, 880.0), (5.9, 659.25), (9.4, 987.77), (13.1, 739.99),
+    ];
+    for (final (at, f) in bells) {
+      final start = (at * _rate).round();
+      final len = (_rate * 1.6).round();
+      for (var j = 0; j < len && start + j < n; j++) {
+        final t = j / _rate;
+        final env = math.pow(math.e, -t * 3.2) * math.min(1.0, t / .01);
+        data[start + j] += math.sin(2 * math.pi * f * t) * .045 * env;
+      }
     }
     return _wav(data);
   }

@@ -307,6 +307,27 @@ class PopIn extends StatelessWidget {
   }
 }
 
+/// Ступенчатое появление элементов списка: каждый следующий чуть позже.
+class StaggerIn extends StatelessWidget {
+  final Widget child;
+  final int index;
+  const StaggerIn({super.key, required this.child, this.index = 0});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 260 + index.clamp(0, 10) * 45),
+      curve: Curves.easeOutCubic,
+      child: child,
+      builder: (context, v, child) => Opacity(
+        opacity: v,
+        child: Transform.translate(offset: Offset(0, 14 * (1 - v)), child: child),
+      ),
+    );
+  }
+}
+
 /// Появление экрана: выезд снизу с затуханием.
 class SlideUpIn extends StatelessWidget {
   final Widget child;

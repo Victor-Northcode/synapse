@@ -42,21 +42,27 @@ void main() {
         await tester.pump(const Duration(milliseconds: 2100));
         await tester.pump(const Duration(milliseconds: 300));
 
-        // Склад.
-        await tester.tap(find.text(app.t('tab2')).first);
-        await tester.pump(const Duration(milliseconds: 300));
+        // Склад (вкладка нижнего меню).
+        await tester.tap(find.text(app.t('tab2').toUpperCase()).first);
+        await tester.pump(const Duration(milliseconds: 400));
         expect(find.byType(ShardIcon), findsWidgets);
+
+        // Топ игроков.
+        await tester.tap(find.byWidgetPredicate(
+            (w) => w is GameIcon && w.name == 'trophy'));
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.text(app.lt('lbTitle')), findsWidgets);
 
         // Настройки.
         await tester.tap(find.byWidgetPredicate(
             (w) => w is GameIcon && w.name == 'gear'));
-        await tester.pump(const Duration(milliseconds: 300));
-        expect(find.text(app.t('set')), findsOneWidget);
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.text(app.t('set')), findsWidgets);
 
-        // Игровой экран.
+        // Назад в журнал — игровой экран.
         await tester.tap(find.byWidgetPredicate(
-            (w) => w is Glyph && w.kind == GlyphKind.chevronLeft));
-        await tester.pump(const Duration(milliseconds: 200));
+            (w) => w is GameIcon && w.name == 'folder'));
+        await tester.pump(const Duration(milliseconds: 400));
         await tester.tap(find.byType(PillButton).first);
         await tester.pump(const Duration(milliseconds: 900));
         await tester.tap(find.byWidgetPredicate(

@@ -43,27 +43,39 @@ class SettingsScreen extends StatelessWidget {
                   letterSpacing: .9,
                   color: Pal.text)),
         ),
-        _switchRow(app.t('sound'), app.soundOn, app.setSound),
-        _switchRow(app.t('vibro'), app.vibroOn, app.setVibro),
-        _switchRow(app.t('push'), app.pushOn, (v) => app.setPush(v)),
-        _langRow(context, app),
+        StaggerIn(index: 0, child: _switchRow(app.lt('musicL'), app.musicOn, app.setMusic)),
+        StaggerIn(index: 1, child: _switchRow(app.t('sound'), app.soundOn, app.setSound)),
+        StaggerIn(index: 2, child: _switchRow(app.t('vibro'), app.vibroOn, app.setVibro)),
+        StaggerIn(
+            index: 3, child: _switchRow(app.t('push'), app.pushOn, (v) => app.setPush(v))),
+        StaggerIn(index: 4, child: _langRow(context, app)),
         const SizedBox(height: 16),
-        GhostButton(onTap: onShowIntro, child: Text(app.t('intro'))),
+        StaggerIn(
+            index: 5,
+            child: GhostButton(onTap: onShowIntro, child: Text(app.t('intro')))),
         const SizedBox(height: 10),
-        GhostButton(onTap: onShowPrivacy, child: Text(app.t('privacy'))),
+        StaggerIn(
+            index: 6,
+            child: GhostButton(onTap: onShowPrivacy, child: Text(app.t('privacy')))),
         if (Ads.instance.needsPrivacyOptions) ...[
           const SizedBox(height: 10),
-          GhostButton(
-            onTap: () => Ads.instance.openPrivacyOptions(),
-            child: Text(app.t('adpriv')),
+          StaggerIn(
+            index: 7,
+            child: GhostButton(
+              onTap: () => Ads.instance.openPrivacyOptions(),
+              child: Text(app.t('adpriv')),
+            ),
           ),
         ],
         const SizedBox(height: 10),
-        GhostButton(
-          onTap: () => _confirmReset(context, app),
-          borderColor: Pal.red,
-          textColor: Pal.red,
-          child: Text(app.t('reset')),
+        StaggerIn(
+          index: 8,
+          child: GhostButton(
+            onTap: () => _confirmReset(context, app),
+            borderColor: Pal.red,
+            textColor: Pal.red,
+            child: Text(app.t('reset')),
+          ),
         ),
       ],
       ),
@@ -178,7 +190,37 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  /// Обнуление прогресса подтверждается ДВАЖДЫ: сначала объяснение, что
+  /// именно исчезнет, потом «последний шанс». Отмена всегда первая
+  /// по заметности — случайно стереть прогресс не выйдет.
   void _confirmReset(BuildContext context, AppState app) {
+    _resetDialog(
+      context,
+      title: app.lt('resetT'),
+      body: app.lt('resetB'),
+      confirmLabel: app.lt('resetYes'),
+      cancelLabel: app.lt('cancel'),
+      onConfirm: () {
+        _resetDialog(
+          context,
+          title: app.lt('resetT'),
+          body: app.lt('resetB2'),
+          confirmLabel: app.lt('resetYes'),
+          cancelLabel: app.lt('cancel'),
+          onConfirm: app.resetProgress,
+        );
+      },
+    );
+  }
+
+  void _resetDialog(
+    BuildContext context, {
+    required String title,
+    required String body,
+    required String confirmLabel,
+    required String cancelLabel,
+    required VoidCallback onConfirm,
+  }) {
     showDialog<void>(
       context: context,
       builder: (context) => Dialog(
@@ -190,30 +232,38 @@ class SettingsScreen extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(app.t('reset'),
+            Text(title,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontFamily: Fonts.disp,
                     fontSize: 15,
                     letterSpacing: 1.4,
                     color: Pal.red)),
+            const SizedBox(height: 12),
+            Text(body,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontFamily: Fonts.mono,
+                    fontSize: 12,
+                    height: 1.6,
+                    color: Pal.bodyDim)),
             const SizedBox(height: 20),
-            GhostButton(
-              onTap: () {
-                Navigator.pop(context);
-                app.resetProgress();
-              },
-              borderColor: const Color(0x80FF3B30),
-              textColor: Pal.red,
-              minHeight: 52,
-              child: Text(app.t('reset')),
-            ),
-            const SizedBox(height: 10),
             GhostButton(
               onTap: () => Navigator.pop(context),
               minHeight: 52,
               fill: const Color(0x0F78A0FF),
-              child: Text(app.t('mechOk')),
+              child: Text(cancelLabel),
+            ),
+            const SizedBox(height: 10),
+            GhostButton(
+              onTap: () {
+                Navigator.pop(context);
+                onConfirm();
+              },
+              borderColor: const Color(0x80FF3B30),
+              textColor: Pal.red,
+              minHeight: 52,
+              child: Text(confirmLabel),
             ),
           ]),
         ),

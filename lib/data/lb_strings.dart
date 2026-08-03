@@ -1,8 +1,10 @@
-/// Строки экрана лидеров — дописаны при добавлении топ-100,
+/// Строки экрана «Топ игроков» — дописаны при добавлении топ-100,
 /// в исходной игре таблиц не было.
 const Map<String, Map<String, String>> kLbStrings = {
   'en': {
-    'lbTitle': 'TOP OPERATORS',
+    'lbTitle': 'TOP PLAYERS',
+    'navTop': 'Top',
+    'lbOnlineT': 'global ranking',
     'lbWeek': 'This week',
     'lbAll': 'All time',
     'lbYou': 'You',
@@ -16,7 +18,9 @@ const Map<String, Map<String, String>> kLbStrings = {
     'lbSignBtn': 'Sign in',
   },
   'ru': {
-    'lbTitle': 'ТОП ОПЕРАТОРОВ',
+    'lbTitle': 'ТОП ИГРОКОВ',
+    'navTop': 'Топ',
+    'lbOnlineT': 'общий рейтинг',
     'lbWeek': 'За неделю',
     'lbAll': 'За всё время',
     'lbYou': 'Ты',
@@ -30,7 +34,9 @@ const Map<String, Map<String, String>> kLbStrings = {
     'lbSignBtn': 'Войти',
   },
   'es': {
-    'lbTitle': 'MEJORES OPERADORES',
+    'lbTitle': 'MEJORES JUGADORES',
+    'navTop': 'Top',
+    'lbOnlineT': 'ranking global',
     'lbWeek': 'Esta semana',
     'lbAll': 'Histórico',
     'lbYou': 'Tú',
@@ -44,7 +50,9 @@ const Map<String, Map<String, String>> kLbStrings = {
     'lbSignBtn': 'Iniciar sesión',
   },
   'fr': {
-    'lbTitle': 'TOP OPÉRATEURS',
+    'lbTitle': 'TOP JOUEURS',
+    'navTop': 'Top',
+    'lbOnlineT': 'classement mondial',
     'lbWeek': 'Cette semaine',
     'lbAll': 'Tous les temps',
     'lbYou': 'Toi',
@@ -58,7 +66,9 @@ const Map<String, Map<String, String>> kLbStrings = {
     'lbSignBtn': 'Se connecter',
   },
   'de': {
-    'lbTitle': 'TOP-OPERATOREN',
+    'lbTitle': 'TOP-SPIELER',
+    'navTop': 'Top',
+    'lbOnlineT': 'globale Rangliste',
     'lbWeek': 'Diese Woche',
     'lbAll': 'Allzeit',
     'lbYou': 'Du',
@@ -72,7 +82,9 @@ const Map<String, Map<String, String>> kLbStrings = {
     'lbSignBtn': 'Anmelden',
   },
   'it': {
-    'lbTitle': 'TOP OPERATORI',
+    'lbTitle': 'TOP GIOCATORI',
+    'navTop': 'Top',
+    'lbOnlineT': 'classifica globale',
     'lbWeek': 'Questa settimana',
     'lbAll': 'Di sempre',
     'lbYou': 'Tu',
@@ -86,7 +98,9 @@ const Map<String, Map<String, String>> kLbStrings = {
     'lbSignBtn': 'Accedi',
   },
   'ja': {
-    'lbTitle': 'トップオペレーター',
+    'lbTitle': 'トッププレイヤー',
+    'navTop': 'ランク',
+    'lbOnlineT': '世界ランキング',
     'lbWeek': '今週',
     'lbAll': '全期間',
     'lbYou': 'あなた',
@@ -100,7 +114,9 @@ const Map<String, Map<String, String>> kLbStrings = {
     'lbSignBtn': 'サインイン',
   },
   'ko': {
-    'lbTitle': '톱 오퍼레이터',
+    'lbTitle': '톱 플레이어',
+    'navTop': '랭킹',
+    'lbOnlineT': '전체 랭킹',
     'lbWeek': '이번 주',
     'lbAll': '전체 기간',
     'lbYou': '나',
@@ -114,7 +130,9 @@ const Map<String, Map<String, String>> kLbStrings = {
     'lbSignBtn': '로그인',
   },
   'ar': {
-    'lbTitle': 'أفضل المشغّلين',
+    'lbTitle': 'أفضل اللاعبين',
+    'navTop': 'الترتيب',
+    'lbOnlineT': 'التصنيف العالمي',
     'lbWeek': 'هذا الأسبوع',
     'lbAll': 'كل الأوقات',
     'lbYou': 'أنت',

@@ -71,6 +71,7 @@ class PlayState extends ChangeNotifier {
 
   int moves = 0, movesMax = 1;
   int crossings = 0;
+  int startCross = 1; // пересечений на старте — для звуковой шкалы прогресса
   bool alive = false;
   int dragIdx = -1;
   List<double> _dragOff = [0, 0];
@@ -141,6 +142,7 @@ class PlayState extends ChangeNotifier {
     moves = movesMax;
 
     _recount();
+    startCross = math.max(1, crossings);
     _startTimers();
     GameAudio.instance.tone(680, .1, 'square', .04);
 
@@ -432,7 +434,10 @@ class PlayState extends ChangeNotifier {
         }
       }
       snapSeq++;
-      GameAudio.instance.snapTone(snapSeq);
+      // Высота щелчка опускается по мере распутывания — монотонная
+      // шкала без рестартов (жалоба: «звук начинает идти сначала»).
+      GameAudio.instance
+          .snapTone(snapSeq, 1 - (crossings / startCross).clamp(0.0, 1.0));
       Haptics.instance.snap();
       onFx?.call(PlayFxEvent(PlayFx.snap, i));
     }
@@ -646,13 +651,14 @@ class PlayState extends ChangeNotifier {
     } else if (kd2 == 1) {
       got += 1;
     }
+    got += app.bonusTokens;
     app.tokens += got;
-    // Осколки: за чистое прохождение и за мастерство.
-    final cleanRun = noHintRun;
-    final skillBonus = (kd2 == 2 && left > 0.5) || (level % 10 == 0 && left > 0.6);
-    if (cleanRun) app.shards++;
+    // Осколки — редкая валюта: только за мастерство на «очень сложных»
+    // связях. Обычные победы платят компьютом, а не осколками.
+    final skillBonus = kd2 == 2 && left > 0.5 && noHintRun;
     if (skillBonus) app.shards++;
     if (level % 15 == 0) app.hintStock++;
+    app.recordWin(level);
     app.level = level + 1;
     app.save();
     GameAudio.instance.chord([523, 659, 784, 1047], .3);
@@ -666,7 +672,7 @@ class PlayState extends ChangeNotifier {
     }
     // Очки в таблицы лидеров: «распутано связей» = пройденный уровень.
     Lb.instance.submit(app.level - 1);
-    result = LevelResult(true, got, (cleanRun ? 1 : 0) + (skillBonus ? 1 : 0), level,
+    result = LevelResult(true, got, skillBonus ? 1 : 0, level,
         crossings, nodes.length, edges.length, spec(app.level).n);
     app.notify();
     onFx?.call(const PlayFxEvent(PlayFx.win));

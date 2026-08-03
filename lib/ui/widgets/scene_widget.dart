@@ -145,10 +145,37 @@ class _ScenePainter extends CustomPainter {
       }
     }
     if (noise) {
-      // Полоса помех.
-      final y = size.height * ((t * 1.4) % 1);
-      canvas.drawRect(Rect.fromLTWH(0, y, size.width, 7),
-          Paint()..color = const Color(0x22FF2ED1));
+      // Сканер помех ходит ВВЕРХ-ВНИЗ (треугольная волна), а не падает
+      // только вниз: луч с мягкими градиентными краями и яркой нитью,
+      // узлы рядом с лучом коротко вспыхивают.
+      final ph = (t * 0.8) % 1.0;
+      final tri = ph < .5 ? ph * 2 : 2 - ph * 2;
+      final y = size.height * (0.06 + 0.88 * Curves.easeInOut.transform(tri));
+      const beamH = 34.0;
+      final beam = Rect.fromLTWH(0, y - beamH / 2, size.width, beamH);
+      canvas.drawRect(
+        beam,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0x00FF2ED1), Color(0x2EFF2ED1), Color(0x00FF2ED1)],
+          ).createShader(beam),
+      );
+      canvas.drawRect(Rect.fromLTWH(0, y - 1, size.width, 2),
+          Paint()..color = const Color(0x66FF2ED1));
+      for (final p0 in kScenePts) {
+        final p = _pt(p0, size);
+        final d = (p.dy - y).abs();
+        if (d < 22) {
+          canvas.drawCircle(
+              p,
+              9,
+              Paint()
+                ..color = Pal.mag.withValues(alpha: .35 * (1 - d / 22))
+                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+        }
+      }
     }
   }
 

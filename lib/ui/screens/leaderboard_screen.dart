@@ -7,23 +7,33 @@ import '../../state/app_state.dart';
 import '../layout.dart';
 import '../widgets/common.dart';
 
-/// Топ операторов: за неделю и за всё время.
-/// Топ-3 отмечены золотом/серебром/бронзой, своя строка закреплена снизу.
+/// Топ игроков.
+///
+/// Сверху — уровень оператора и личные рекорды: они локальные и работают
+/// всегда, даже без интернета. Ниже — общий рейтинг (Game Center / Play
+/// Игры), когда он настроен и есть сеть; иначе — честное объяснение.
 class LeaderboardScreen extends StatefulWidget {
   final AppState app;
   final VoidCallback onClose;
+
+  /// true — экран живёт во вкладке нижнего меню (без кнопки «назад»).
+  final bool embedded;
 
   /// Данные для превью в тестах/скриншотах: список и своя строка.
   final (List<LeaderboardScoreData>, LeaderboardScoreData?)? previewData;
 
   const LeaderboardScreen(
-      {super.key, required this.app, required this.onClose, this.previewData});
+      {super.key,
+      required this.app,
+      required this.onClose,
+      this.embedded = false,
+      this.previewData});
 
   @override
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
 
-enum _LbState { needSignIn, loading, ready, error }
+enum _LbState { offline, needSignIn, loading, ready, error }
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   bool weekly = true;
@@ -45,6 +55,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         me = preview.$2;
         state = _LbState.ready;
       });
+      return;
+    }
+    if (!Lb.instance.available) {
+      setState(() => state = _LbState.offline);
       return;
     }
     setState(() => state = _LbState.loading);
@@ -77,71 +91,213 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   @override
   Widget build(BuildContext context) {
     final app = widget.app;
+    final hasOnline = Lb.instance.available || widget.previewData != null;
+    // Один общий скролл: рекорды, вкладки и рейтинг едут вместе —
+    // на коротких экранах (телефон в альбоме) ничего не переполняется.
     return Container(
-      decoration: const BoxDecoration(gradient: Pal.fieldGradient),
+      decoration:
+          widget.embedded ? null : const BoxDecoration(gradient: Pal.fieldGradient),
       child: SafeArea(
+        top: !widget.embedded,
+        bottom: !widget.embedded,
         child: ContentColumn(
           child: Column(children: [
-          // Шапка: назад · титул · системная таблица.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-            child: Row(children: [
-              Pressable(
-                onTap: widget.onClose,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Pal.panel,
-                    border: Border.all(color: Pal.line),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: const Glyph(GlyphKind.chevronLeft, size: 20, color: Pal.text),
-                ),
+            _header(app),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 10),
+                children: [
+                  StaggerIn(index: 1, child: _recordsPanel(app)),
+                  if (hasOnline)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                      child: Row(children: [
+                        Expanded(child: _tab(app.lt('lbWeek'), true)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _tab(app.lt('lbAll'), false)),
+                      ]),
+                    )
+                  else
+                    const SizedBox(height: 8),
+                  ..._body(app),
+                ],
               ),
-              Expanded(
-                child: Column(children: [
-                  const GameIcon('trophy', size: 22, color: Pal.yellow),
-                  const SizedBox(height: 4),
-                  Text(app.lt('lbTitle'),
-                      style: const TextStyle(
-                          fontFamily: Fonts.disp,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          letterSpacing: 2.2,
-                          color: Pal.text)),
-                ]),
-              ),
-              Pressable(
-                onTap: () => Lb.instance.openNative(weekly: weekly),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Pal.panel,
-                    border: Border.all(color: Pal.line),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: const GameIcon('screen', size: 16, color: Pal.dim),
-                ),
-              ),
-            ]),
-          ),
-          // Вкладки-пилюли: неделя / всё время.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-            child: Row(children: [
-              Expanded(child: _tab(app.lt('lbWeek'), true)),
-              const SizedBox(width: 8),
-              Expanded(child: _tab(app.lt('lbAll'), false)),
-            ]),
-          ),
-          Expanded(child: _body(app)),
-          if (state == _LbState.ready && me != null) _meRow(app),
-        ]),
+            ),
+            if (state == _LbState.ready && me != null) _meRow(app),
+          ]),
         ),
+      ),
+    );
+  }
+
+  Widget _header(AppState app) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: Row(children: [
+        if (!widget.embedded)
+          Pressable(
+            onTap: widget.onClose,
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Pal.panel,
+                border: Border.all(color: Pal.line),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Glyph(GlyphKind.chevronLeft, size: 20, color: Pal.text),
+            ),
+          )
+        else
+          const SizedBox(width: 36),
+        Expanded(
+          child: Column(children: [
+            const GameIcon('trophy', size: 22, color: Pal.yellow),
+            const SizedBox(height: 4),
+            Text(app.lt('lbTitle'),
+                style: const TextStyle(
+                    fontFamily: Fonts.disp,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    letterSpacing: 2.2,
+                    color: Pal.text)),
+          ]),
+        ),
+        if (Lb.instance.available)
+          Pressable(
+            onTap: () => Lb.instance.openNative(weekly: weekly),
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Pal.panel,
+                border: Border.all(color: Pal.line),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const GameIcon('screen', size: 16, color: Pal.dim),
+            ),
+          )
+        else
+          const SizedBox(width: 36),
+      ]),
+    );
+  }
+
+  /// Уровень оператора + личные рекорды: работают всегда, без сети.
+  Widget _recordsPanel(AppState app) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: GamePanel(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            // Значок уровня оператора.
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF26314F), Color(0xFF0B1020)],
+                ),
+                border: Border.all(color: const Color(0x8000E5FF), width: 1.4),
+                boxShadow: const [BoxShadow(color: Color(0x2E00E5FF), blurRadius: 14)],
+              ),
+              child: Text('${app.operatorLevel}',
+                  style: const TextStyle(
+                      fontFamily: Fonts.disp,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      color: Pal.cyan)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(app.lt('opLvl').replaceAll('{n}', '${app.operatorLevel}'),
+                    style: const TextStyle(
+                        fontFamily: Fonts.mono,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Pal.text)),
+                const SizedBox(height: 3),
+                Text(
+                  app
+                      .lt('opNext')
+                      .replaceAll('{n}', '${app.winsToNextLevel}')
+                      .replaceAll('{l}', '${app.operatorLevel + 1}'),
+                  style: const TextStyle(
+                      fontFamily: Fonts.mono, fontSize: 9, color: Pal.dim),
+                ),
+                const SizedBox(height: 5),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: SizedBox(
+                    height: 4,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(end: app.operatorProgress),
+                      duration: const Duration(milliseconds: 700),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, v, _) => LinearProgressIndicator(
+                        value: v,
+                        backgroundColor: Pal.bg,
+                        valueColor: const AlwaysStoppedAnimation(Pal.cyan),
+                      ),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          SectionTitle(app.lt('lbLocal')),
+          const SizedBox(height: 9),
+          Row(children: [
+            _stat(app.lt('lbBest'), '${app.bestLevel}', Pal.yellow),
+            const SizedBox(width: 7),
+            _stat(app.lt('lbStreak'), '${app.bestStreak}', Pal.mag),
+            const SizedBox(width: 7),
+            _stat(app.lt('lbTotal'), '${app.totalWins}', Pal.green),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  Widget _stat(String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
+        decoration: BoxDecoration(
+          color: Pal.bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Pal.line),
+        ),
+        child: Column(children: [
+          TweenAnimationBuilder<double>(
+            tween: Tween(end: double.tryParse(value) ?? 0),
+            duration: const Duration(milliseconds: 700),
+            curve: Curves.easeOutCubic,
+            builder: (context, v, _) => Text('${v.round()}',
+                style: TextStyle(
+                    fontFamily: Fonts.disp,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    color: color)),
+          ),
+          const SizedBox(height: 3),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(label,
+                maxLines: 1,
+                style: const TextStyle(
+                    fontFamily: Fonts.mono, fontSize: 8, letterSpacing: .4, color: Pal.dim)),
+          ),
+        ]),
       ),
     );
   }
@@ -151,7 +307,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     return Pressable(
       onTap: () => _switch(w),
       child: Container(
-        height: 46,
+        height: 42,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: on ? const Color(0x2400E5FF) : Colors.transparent,
@@ -171,91 +327,125 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _body(AppState app) {
+  /// Содержимое онлайн-части — элементы общего списка.
+  List<Widget> _body(AppState app) {
     switch (state) {
-      case _LbState.loading:
-        return const Center(
-          child: SizedBox(
-            width: 26,
-            height: 26,
-            child: CircularProgressIndicator(strokeWidth: 2.4, color: Pal.cyan),
+      case _LbState.offline:
+        // Онлайн-рейтинг недоступен (не настроен или нет сети) —
+        // объясняем и показываем, что локальные рекорды при этом живы.
+        return [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(30, 26, 30, 20),
+            child: Column(children: [
+              const GameIcon('sat', size: 40, color: Pal.dim),
+              const SizedBox(height: 16),
+              Text(app.lt('lbOffline'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontFamily: Fonts.mono,
+                      fontSize: 12,
+                      height: 1.7,
+                      color: Pal.bodyDim)),
+            ]),
           ),
-        );
+        ];
+      case _LbState.loading:
+        return const [
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+              child: SizedBox(
+                width: 26,
+                height: 26,
+                child: CircularProgressIndicator(strokeWidth: 2.4, color: Pal.cyan),
+              ),
+            ),
+          ),
+        ];
       case _LbState.needSignIn:
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(30),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const GameIcon('trophy', size: 52, color: Pal.yellow),
-              const SizedBox(height: 20),
+        return [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(30, 20, 30, 20),
+            child: Column(children: [
+              const GameIcon('trophy', size: 44, color: Pal.yellow),
+              const SizedBox(height: 16),
               Text(app.lt('lbSignT'),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                       fontFamily: Fonts.disp,
-                      fontSize: 17,
+                      fontSize: 16,
                       letterSpacing: 1.8,
                       height: 1.5,
                       color: Pal.text)),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Text(
                 app.lt('lbSignB').replaceAll('{s}', Lb.instance.serviceName),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontFamily: Fonts.mono,
-                    fontSize: 12.5,
+                    fontSize: 12,
                     height: 1.7,
                     color: Pal.bodyDim),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               SizedBox(
                 width: 240,
                 child: PillButton(
-                  minHeight: 62,
+                  minHeight: 58,
                   onTap: _load,
                   child: Text(app.lt('lbSignBtn')),
                 ),
               ),
             ]),
           ),
-        );
+        ];
       case _LbState.error:
-        return Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(app.lt('lbFail'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontFamily: Fonts.mono, fontSize: 12.5, height: 1.7, color: Pal.dim)),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: 200,
-              child: GhostButton(onTap: _load, child: Text(app.lt('lbRetry'))),
-            ),
-          ]),
-        );
+        return [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(30, 26, 30, 20),
+            child: Column(children: [
+              Text(app.lt('lbFail'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontFamily: Fonts.mono, fontSize: 12.5, height: 1.7, color: Pal.dim)),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: 200,
+                child: GhostButton(onTap: _load, child: Text(app.lt('lbRetry'))),
+              ),
+            ]),
+          ),
+        ];
       case _LbState.ready:
         if (rows.isEmpty) {
-          return Center(
-            child: Text(app.lt('lbEmpty'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontFamily: Fonts.mono, fontSize: 12.5, height: 1.7, color: Pal.dim)),
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
-          itemCount: rows.length,
-          itemBuilder: (context, i) => TweenAnimationBuilder<double>(
-            key: ValueKey('$weekly-$i'),
-            tween: Tween(begin: 0, end: 1),
-            duration: Duration(milliseconds: 240 + (i.clamp(0, 14)) * 40),
-            curve: Curves.easeOutCubic,
-            builder: (context, v, child) => Opacity(
-              opacity: v,
-              child: Transform.translate(offset: Offset(0, 10 * (1 - v)), child: child),
+          return [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 30),
+              child: Text(app.lt('lbEmpty'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontFamily: Fonts.mono, fontSize: 12.5, height: 1.7, color: Pal.dim)),
             ),
-            child: _row(rows[i], mine: false),
-          ),
-        );
+          ];
+        }
+        return [
+          for (var i = 0; i < rows.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TweenAnimationBuilder<double>(
+                key: ValueKey('$weekly-$i'),
+                tween: Tween(begin: 0, end: 1),
+                duration: Duration(milliseconds: 240 + (i.clamp(0, 14)) * 40),
+                curve: Curves.easeOutCubic,
+                builder: (context, v, child) => Opacity(
+                  opacity: v,
+                  child:
+                      Transform.translate(offset: Offset(0, 10 * (1 - v)), child: child),
+                ),
+                child: _row(rows[i], mine: false),
+              ),
+            ),
+        ];
     }
   }
 

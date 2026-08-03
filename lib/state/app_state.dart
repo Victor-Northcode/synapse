@@ -9,7 +9,9 @@ import '../core/notifications.dart';
 import '../core/storage.dart';
 import '../data/game_data.dart';
 import '../data/lb_strings.dart';
+import '../data/push_data.dart';
 import '../data/story_data.dart';
+import '../data/upgrade_data.dart';
 import '../data/strings.dart';
 import '../data/task_data.dart';
 import '../game/level.dart' show hash32;
@@ -49,6 +51,15 @@ class AppState extends ChangeNotifier {
   Map<String, int> inv = {'cut': 0, 'stab': 0, 'auto': 0};
   int adShards = 0;
   int adItems = 0; // предметы за ролик, до 3 в день
+
+  /// Мастерская: ключ апгрейда → купленный уровень.
+  Map<String, int> upgrades = {};
+
+  /// Личные рекорды — работают всегда, даже без сети.
+  int bestLevel = 0;
+  int bestStreak = 0;
+  int totalWins = 0;
+  bool musicOn = true;
   int theme = 0;
   List<int> owned = [1, 0, 0, 0];
   List<bool> done = [];
@@ -87,7 +98,80 @@ class AppState extends ChangeNotifier {
 
   /// Строки экрана лидеров (добавлены поверх исходного словаря).
   String lt(String key) =>
-      kLbStrings[lang]?[key] ?? kLbStrings['en']![key] ?? key;
+      kLbStrings[lang]?[key] ??
+      kUpgradeStrings[lang]?[key] ??
+      kLbStrings['en']?[key] ??
+      kUpgradeStrings['en']![key] ??
+      key;
+
+  // ---------- мастерская ----------
+  int upLevel(String key) => upgrades[key] ?? 0;
+
+  /// Цена следующего уровня; null — уже максимум.
+  int? upPrice(Upgrade u) {
+    final next = upLevel(u.key) + 1;
+    return next > u.maxLevel ? null : u.priceFor(next);
+  }
+
+  bool buyUpgrade(Upgrade u) {
+    final price = upPrice(u);
+    if (price == null) return false;
+    if (shards < price) {
+      onEvent?.call(GameEvent(GameEventType.toast,
+          text: t('needSh').replaceAll('{n}', '${price - shards}')));
+      Haptics.instance.reject();
+      return false;
+    }
+    shards -= price;
+    upgrades[u.key] = upLevel(u.key) + 1;
+    if (u.key == 'hints') hintStock++; // эффект виден сразу
+    save();
+    GameAudio.instance.chord([523, 784, 1047]);
+    Haptics.instance.success();
+    onEvent?.call(GameEvent(GameEventType.toast,
+        text: lt('upBought').replaceAll('{n}', lt('up_${u.key}'))));
+    notifyListeners();
+    return true;
+  }
+
+  /// Бонусы апгрейдов, которые читает игровой движок.
+  int get bonusMoves => upLevel('moves') * 2;
+  int get bonusTokens => upLevel('income');
+  bool get hasScan => upLevel('scan') > 0;
+  int get dailyHintBonus => upLevel('hints');
+
+  // ---------- уровень оператора ----------
+  /// Опыт — распутанные связи. Порог уровня растёт линейно:
+  /// 1→2 через 5 связей, дальше +5 к шагу.
+  int get operatorLevel {
+    var lvl = 1, need = 5, left = totalWins;
+    while (left >= need && lvl < 99) {
+      left -= need;
+      lvl++;
+      need += 5;
+    }
+    return lvl;
+  }
+
+  int get winsToNextLevel {
+    var lvl = 1, need = 5, left = totalWins;
+    while (left >= need && lvl < 99) {
+      left -= need;
+      lvl++;
+      need += 5;
+    }
+    return need - left;
+  }
+
+  double get operatorProgress {
+    var lvl = 1, need = 5, left = totalWins;
+    while (left >= need && lvl < 99) {
+      left -= need;
+      lvl++;
+      need += 5;
+    }
+    return need == 0 ? 0 : left / need;
+  }
 
   // ---------- загрузка/сохранение ----------
   void loadSaved() {
@@ -115,6 +199,16 @@ class AppState extends ChangeNotifier {
       }
       adShards = (sv['ads'] as num?)?.toInt() ?? 0;
       adItems = (sv['adb'] as num?)?.toInt() ?? 0;
+      if (sv['up'] is Map) {
+        upgrades = {
+          for (final e in (sv['up'] as Map).entries)
+            e.key.toString(): (e.value as num).toInt()
+        };
+      }
+      bestLevel = (sv['bl'] as num?)?.toInt() ?? 0;
+      bestStreak = (sv['bs'] as num?)?.toInt() ?? 0;
+      totalWins = (sv['tw'] as num?)?.toInt() ?? 0;
+      musicOn = sv['mu'] != false;
       theme = ((sv['th'] as num?)?.toInt() ?? 0).clamp(0, kThemes.length - 1);
       if (sv['ow'] is List) {
         owned = [for (final v in sv['ow'] as List) (v as num).toInt()];
@@ -136,6 +230,7 @@ class AppState extends ChangeNotifier {
       lang = detectLang();
     }
     GameAudio.instance.enabled = soundOn;
+    GameAudio.instance.setMusicEnabled(musicOn);
     Haptics.instance.enabled = vibroOn;
     buildChapter();
     checkDay();
@@ -155,6 +250,11 @@ class AppState extends ChangeNotifier {
       'inv': inv,
       'ads': adShards,
       'adb': adItems,
+      'up': upgrades,
+      'bl': bestLevel,
+      'bs': bestStreak,
+      'tw': totalWins,
+      'mu': musicOn,
       'th': theme,
       'ow': owned,
       'ch': chapter,
@@ -290,19 +390,45 @@ class AppState extends ChangeNotifier {
       GameAudio.instance.chord([784, 1047]);
       if (gDone[0] && gDone[1] && gDone[2]) {
         streak++;
-        final bonus = streak % 14 == 0 ? 8 : (streak % 7 == 0 ? 5 : (streak % 3 == 0 ? 2 : 1));
+        if (streak > bestStreak) bestStreak = streak;
+        // Осколки — редкая валюта: серия платит только на вехах,
+        // а не каждый день (иначе они копятся быстрее, чем тратятся).
+        final bonus = streak % 14 == 0 ? 4 : (streak % 7 == 0 ? 2 : (streak % 3 == 0 ? 1 : 0));
         shards += bonus;
         if (streak % 7 == 0) inv['stab'] = inv['stab']! + 1;
         Future.delayed(const Duration(milliseconds: 900), () {
           onEvent?.call(GameEvent(GameEventType.toast,
-              text: t('streakUp')
-                  .replaceAll('{d}', '$streak')
-                  .replaceAll('{n}', '$bonus')));
+              text: bonus > 0
+                  ? t('streakUp')
+                      .replaceAll('{d}', '$streak')
+                      .replaceAll('{n}', '$bonus')
+                  : t('streakN').replaceAll('{d}', '$streak')));
           GameAudio.instance.chord([659, 880, 1175]);
         });
       }
       save();
       notifyListeners();
+    }
+  }
+
+  // ---------- личные рекорды и уровень оператора ----------
+  /// Вызывается движком при каждой победе: ведёт рекорды и уровень
+  /// оператора. Повышение уровня — редкое событие, платит осколками.
+  void recordWin(int lvl) {
+    checkDay();
+    final before = operatorLevel;
+    totalWins++;
+    if (lvl > bestLevel) bestLevel = lvl;
+    if (streak > bestStreak) bestStreak = streak;
+    final after = operatorLevel;
+    if (after > before) {
+      shards += 2;
+      Future.delayed(const Duration(milliseconds: 1400), () {
+        onEvent?.call(GameEvent(GameEventType.toast,
+            text: lt('opUp').replaceAll('{n}', '$after').replaceAll('{s}', '2✦')));
+        GameAudio.instance.chord([523, 659, 784, 1047]);
+        Haptics.instance.fanfare();
+      });
     }
   }
 
@@ -364,7 +490,7 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------- магазин ----------
-  int hintPrice() => 5 + math.min(15, hintBought);
+  int hintPrice() => 6 + math.min(15, hintBought);
 
   bool buyBooster(int bi) {
     final b = kBoosters[bi];
@@ -423,21 +549,14 @@ class AppState extends ChangeNotifier {
   }
 
   /// Предмет за ролик, когда осколков не хватает: бустер или подсказка.
-  /// До трёх предметов в день — тем же принципом, что и +2✦.
+  /// До трёх предметов в день — тем же принципом, что и +1✦.
   bool get canAdItem => adItems < 3 && Ads.instance.hasAds;
 
-  /// Предложение «за ролик» появляется РЕДКО: примерно у одного предмета
-  /// в день, состав меняется ежедневно. Детерминировано от даты, чтобы
-  /// кнопка не мигала между перерисовками и не исчезала в течение дня.
+  /// Осколков не хватает — вместо цены на карточке показывается кнопка
+  /// «за ролик» (пока не исчерпан дневной лимит предметов).
   bool adOfferFor(String kind) {
     if (!canAdItem) return false;
-    final idx = const ['cut', 'stab', 'auto', 'hint'].indexOf(kind);
-    if (idx < 0) return false;
-    var seed = 0;
-    for (final c in dayKey.codeUnits) {
-      seed = (seed * 31 + c) & 0x7FFFFFFF;
-    }
-    return hash32(seed + idx * 977 + 5) < 0.28;
+    return const ['cut', 'stab', 'auto', 'hint'].contains(kind);
   }
 
   Future<void> watchAdForItem(String kind) async {
@@ -466,7 +585,8 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// +2✦ за ролик, до трёх в день.
+  /// +1✦ за ролик, до трёх в день. Осколки — премиальная валюта,
+  /// поэтому награда нарочно маленькая: быстро их не нафармить.
   Future<void> watchAdForShards() async {
     if (adShards >= 3) return;
     onEvent?.call(GameEvent(GameEventType.toast, text: t('adWatch')));
@@ -476,16 +596,23 @@ class AppState extends ChangeNotifier {
           text: Ads.instance.hasAds ? t('adFail') : t('adOff')));
       return;
     }
-    shards += 2;
+    shards += 1;
     adShards++;
     save();
-    onEvent?.call(const GameEvent(GameEventType.toast, text: '+2✦'));
+    onEvent?.call(const GameEvent(GameEventType.toast, text: '+1✦'));
     GameAudio.instance.tone(1000, .12, 'sine', .06);
     Haptics.instance.success();
     notifyListeners();
   }
 
   // ---------- настройки ----------
+  void setMusic(bool v) {
+    musicOn = v;
+    GameAudio.instance.setMusicEnabled(v);
+    save();
+    notifyListeners();
+  }
+
   void setSound(bool v) {
     soundOn = v;
     GameAudio.instance.enabled = v;
@@ -518,6 +645,9 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Полное обнуление: прогресс, валюты, улучшения, рекорды и сюжет.
+  /// Настройки звука/языка/уведомлений сохраняются — это выбор
+  /// устройства, а не прогресс.
   void resetProgress() {
     Storage.instance.reset();
     level = 1;
@@ -528,25 +658,36 @@ class AppState extends ChangeNotifier {
     chapter = 0;
     inv = {'cut': 0, 'stab': 0, 'auto': 0};
     adShards = 0;
+    adItems = 0;
+    upgrades = {};
+    bestLevel = 0;
+    bestStreak = 0;
+    totalWins = 0;
     done = [];
     hintBought = 0;
     streak = 0;
+    dayKey = '';
     gp = [0, 0, 0];
     gDone = [false, false, false];
     theme = 0;
     owned = [1, 0, 0, 0];
     introSeen = false;
     buildChapter();
+    checkDay();
     notifyListeners();
     onEvent?.call(const GameEvent(GameEventType.storyIntro));
   }
 
   // ---------- напоминания ----------
-  /// План уведомлений — порт PUSH.plan(): задача дня → цели → стрик.
+  /// План уведомлений: одно в день на неделю вперёд, тексты не
+  /// повторяются. Завтра — контекст (задача дня → цели → серия),
+  /// дальше — ротация мягких напоминаний из kPushStrings.
   void reschedulePush() {
     if (!pushOn) return;
+    final px = kPushStrings[lang] ?? kPushStrings['en']!;
     final entries = <(String, String)>[];
-    final title = t('nudgeT');
+
+    // Завтра: самое конкретное, что можно сказать про сохранение.
     String? body;
     final cd = curDay;
     for (var i = 0; i < tasks.length; i++) {
@@ -555,20 +696,26 @@ class AppState extends ChangeNotifier {
         break;
       }
     }
-    if (body == null) {
-      final doneN = gDone.where((x) => x).length;
-      if (doneN < 3) {
-        body = t('nudgeGoals').replaceAll('{v}', '$doneN/3');
-      } else if (streak > 0) {
-        body = t('nudgeStreak').replaceAll('{d}', '$streak');
-      }
+    body ??= streak > 0
+        ? t('nudgeStreak').replaceAll('{d}', '$streak')
+        : t('nudgeGoals').replaceAll('{v}', '0/3');
+    entries.add((px.titles[0], body));
+
+    // Послезавтра: серия под угрозой или цели дня.
+    entries.add((
+      px.titles[1],
+      streak > 1
+          ? t('nudgeStreak').replaceAll('{d}', '$streak')
+          : t('nudgeGoals').replaceAll('{v}', '0/3'),
+    ));
+
+    // Дни 3–7: спокойная ротация «возвращайся» без повторов подряд.
+    for (var d = 2; d < 7; d++) {
+      entries.add((
+        px.titles[d % px.titles.length],
+        px.bodies[(d - 2) % px.bodies.length],
+      ));
     }
-    if (body == null) return;
-    entries.add((title, body));
-    if (streak > 0) {
-      entries.add((title, t('nudgeStreak').replaceAll('{d}', '$streak')));
-    }
-    entries.add((title, t('nudgeGoals').replaceAll('{v}', '0/3')));
     Push.instance.reschedule(entries);
   }
 

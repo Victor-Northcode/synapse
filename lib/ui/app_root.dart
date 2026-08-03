@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import '../core/ads.dart';
 import '../core/audio.dart';
 import '../core/haptics.dart';
-import '../core/leaderboard.dart';
 import '../core/palette.dart';
 import '../state/app_state.dart';
 import '../state/play_state.dart';
@@ -21,9 +20,11 @@ import 'screens/leaderboard_screen.dart';
 import 'screens/play_screen.dart';
 import 'screens/settings_screen.dart';
 import 'layout.dart';
+import 'widgets/bottom_nav.dart';
 import 'widgets/common.dart';
 
 /// Корень интерфейса: экраны, слои и оверлеи — как Stack из index.html.
+/// Навигация — нижнее меню: Журнал · Склад · Топ · Настройки.
 class AppRoot extends StatefulWidget {
   const AppRoot({super.key});
 
@@ -31,10 +32,9 @@ class AppRoot extends StatefulWidget {
   State<AppRoot> createState() => _AppRootState();
 }
 
-class _AppRootState extends State<AppRoot> {
+class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
   bool booting = true;
-  bool settings = false;
-  bool showLb = false;
+  int tab = 0; // 0 журнал · 1 склад · 2 топ · 3 настройки
   PlayState? play;
   bool showResult = false;
   bool _cardVisible = false;
@@ -53,6 +53,7 @@ class _AppRootState extends State<AppRoot> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       app.onEvent = _onEvent;
     });
@@ -60,9 +61,23 @@ class _AppRootState extends State<AppRoot> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _toastTimer?.cancel();
     play?.dispose();
     super.dispose();
+  }
+
+  /// Фоновая музыка ставится на паузу вместе с приложением; при
+  /// возврате проверяем смену суток (цели дня и дневные лимиты).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      GameAudio.instance.onAppPaused();
+    } else if (state == AppLifecycleState.resumed) {
+      GameAudio.instance.onAppResumed();
+      app.checkDay();
+      app.notify();
+    }
   }
 
   bool get _narrativeOpen => storyMode != null || (play?.pendingCard != null);
@@ -82,7 +97,7 @@ class _AppRootState extends State<AppRoot> {
         setState(() => storyMode = StoryMode.chapterFinale);
       case GameEventType.storyIntro:
         setState(() {
-          settings = false;
+          tab = 0;
           storyMode = StoryMode.intro;
         });
     }
@@ -200,10 +215,6 @@ class _AppRootState extends State<AppRoot> {
       setState(() => showPrivacy = false);
       return true;
     }
-    if (showLb) {
-      setState(() => showLb = false);
-      return true;
-    }
     if (storyMode == StoryMode.dayScene || storyMode == StoryMode.chapterFinale) {
       _closeStory();
       return true;
@@ -211,14 +222,14 @@ class _AppRootState extends State<AppRoot> {
     if (storyMode == StoryMode.intro) return true; // интро не прерываем
     if (showResult) return true;
     if (play?.pendingCard != null) return true;
-    if (settings) {
-      setState(() => settings = false);
-      Haptics.instance.light();
-      return true;
-    }
     if (play != null) {
       play!.quit();
       _quitToHub();
+      Haptics.instance.light();
+      return true;
+    }
+    if (tab != 0) {
+      setState(() => tab = 0);
       Haptics.instance.light();
       return true;
     }
@@ -251,22 +262,58 @@ class _AppRootState extends State<AppRoot> {
         child: Container(
           decoration: const BoxDecoration(gradient: Pal.fieldGradient),
           child: Stack(children: [
-            // Базовый слой: шапка + хаб/настройки.
+            // Базовый слой: шапка + активная вкладка + нижнее меню.
             SafeArea(
+              bottom: false,
               child: Column(children: [
                 ContentColumn(
                     maxWidth: Layout.of(context).twoColumn ? 1100 : null,
                     child: _topBar(app)),
                 Expanded(
-                  child: settings
-                      ? SettingsScreen(
-                          onShowIntro: () => setState(() {
-                            settings = false;
-                            storyMode = StoryMode.intro;
-                          }),
-                          onShowPrivacy: () => setState(() => showPrivacy = true),
-                        )
-                      : HubScreen(onPlay: () => _startLevel(app.level)),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    transitionBuilder: (child, anim) => FadeTransition(
+                      opacity: anim,
+                      child: SlideTransition(
+                        position: Tween(
+                                begin: const Offset(0, .02), end: Offset.zero)
+                            .animate(anim),
+                        child: child,
+                      ),
+                    ),
+                    child: KeyedSubtree(
+                      key: ValueKey(tab),
+                      child: switch (tab) {
+                        1 => const HubScreen(pane: HubPane.supply),
+                        2 => LeaderboardScreen(
+                            app: app,
+                            embedded: true,
+                            onClose: () => setState(() => tab = 0),
+                          ),
+                        3 => SettingsScreen(
+                            onShowIntro: () => setState(() {
+                              storyMode = StoryMode.intro;
+                            }),
+                            onShowPrivacy: () =>
+                                setState(() => showPrivacy = true),
+                          ),
+                        _ => HubScreen(
+                            pane: HubPane.journal,
+                            onPlay: () => _startLevel(app.level)),
+                      },
+                    ),
+                  ),
+                ),
+                BottomNav(
+                  index: tab,
+                  onTap: (i) => setState(() => tab = i),
+                  items: [
+                    NavItem('folder', app.t('tab0')),
+                    NavItem('cube', app.t('tab2')),
+                    NavItem('trophy', app.lt('navTop')),
+                    NavItem('gear', app.t('set')),
+                  ],
                 ),
               ]),
             ),
@@ -328,15 +375,6 @@ class _AppRootState extends State<AppRoot> {
                     day: storyDay,
                     onDone: _closeStory,
                   ),
-                ),
-              ),
-
-            // Топ операторов.
-            if (showLb)
-              Positioned.fill(
-                child: PopIn(
-                  child: LeaderboardScreen(
-                      app: app, onClose: () => setState(() => showLb = false)),
                 ),
               ),
 
@@ -439,7 +477,7 @@ class _AppRootState extends State<AppRoot> {
           ),
           const SizedBox(width: 2),
           const GameIcon('bolt', size: 15, solid: true, color: Pal.yellow),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           TweenAnimationBuilder<double>(
             tween: Tween(end: app.shards.toDouble()),
             duration: const Duration(milliseconds: 500),
@@ -454,38 +492,6 @@ class _AppRootState extends State<AppRoot> {
           const SizedBox(width: 2),
           const ShardIcon(size: 10, color: Pal.cyan),
         ]),
-        if (Lb.instance.available) ...[
-          const SizedBox(width: 10),
-          Pressable(
-            onTap: () => setState(() => showLb = true),
-            child: Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0x59FFD400)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const GameIcon('trophy', size: 17, color: Pal.yellow),
-            ),
-          ),
-        ],
-        const SizedBox(width: 10),
-        Pressable(
-          onTap: () => setState(() => settings = !settings),
-          child: Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              border: Border.all(color: Pal.line),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: settings
-                ? const Glyph(GlyphKind.chevronLeft, size: 20, color: Pal.text)
-                : const GameIcon('gear', size: 17, color: Pal.dim),
-          ),
-        ),
       ]),
     );
   }
