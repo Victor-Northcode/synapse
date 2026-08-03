@@ -47,14 +47,14 @@ flutter_launcher_icons:
   ios: true
   remove_alpha_ios: true
   image_path: assets/icon/icon.png
-  adaptive_icon_background: "#04060E"
+  adaptive_icon_background: "#090C18"
   adaptive_icon_foreground: assets/icon/icon-foreground.png
 
 flutter_native_splash:
-  color: "#04060E"
+  color: "#090C18"
   image: assets/icon/icon-foreground.png
   android_gravity: center
   fullscreen: true
   android_12:
-    color: "#04060E"
+    color: "#090C18"
     image: assets/icon/icon-foreground.png

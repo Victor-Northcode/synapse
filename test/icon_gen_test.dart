@@ -205,7 +205,9 @@ Future<void> _save(String path, void Function(Canvas) paint) async {
 }
 
 void main() {
-  testWidgets('иконка приложения', skip: !autoUpdateGoldenFiles,
+  // ОТКЛЮЧЕНО: владелец положил собственный арт в assets/icon/ —
+  // генератор оставлен как референс, но не должен его перезаписывать.
+  testWidgets('иконка приложения', skip: true,
       (tester) async {
     await tester.runAsync(() async {
       await _save('assets/icon/icon.png', _paintIcon);
