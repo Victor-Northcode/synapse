@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:games_services/games_services.dart';
 
 import '../../core/leaderboard.dart';
+import '../../core/net_board.dart';
 import '../../core/palette.dart';
 import '../../game/rivals.dart';
 import '../../state/app_state.dart';
@@ -66,7 +67,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     }
     setState(() => loading = true);
 
-    // Онлайн-таблица — только если она настроена и реально отвечает.
+    // 1. Платформенные таблицы (Game Center / Play Игры) — если
+    //    настроены и реально отвечают.
     if (Lb.instance.available) {
       try {
         if (await Lb.instance.ensureSignedIn()) {
@@ -85,7 +87,48 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     }
     if (!mounted) return;
 
-    // Локальный рейтинг: детерминированный, без сети, всегда есть.
+    // 2. Сетевой топ (dreamlo): настоящие игроки со всех устройств.
+    //    Свой счёт досылается в фоне; если сервер его ещё не записал,
+    //    строка игрока подмешивается локально — ждать не нужно.
+    if (NetBoard.instance.available) {
+      final myScore = weekly ? app.wgp[0] : app.totalWins;
+      NetBoard.instance
+          .submit(
+              nick: app.nick,
+              allTime: app.totalWins,
+              weeklyScore: app.wgp[0],
+              week: app.weekKey)
+          .ignore();
+      final net =
+          await NetBoard.instance.top(weekly: weekly, week: app.weekKey);
+      if (!mounted) return;
+      if (net != null) {
+        final entries = [...net];
+        if (myScore > 0 && !entries.any((e) => e.$1 == app.nick)) {
+          entries.add((app.nick, myScore));
+          entries.sort((a, b) => b.$2 - a.$2);
+        }
+        if (entries.isNotEmpty) {
+          final rows2 = <RivalRow>[];
+          RivalRow? mine;
+          for (var i = 0; i < entries.length; i++) {
+            final isMe = entries[i].$1 == app.nick;
+            final row = RivalRow(i + 1,
+                isMe ? app.lt('lbYou') : entries[i].$1, entries[i].$2, isMe);
+            rows2.add(row);
+            if (isMe) mine = row;
+          }
+          setState(() {
+            rows = rows2;
+            me = mine;
+            loading = false;
+          });
+          return;
+        }
+      }
+    }
+
+    // 3. Локальный рейтинг: детерминированный, без сети, всегда есть.
     final localRows = buildRivals(
       myScore: weekly ? app.wgp[0] : app.totalWins,
       myName: app.lt('lbYou'),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -21,10 +22,17 @@ class GameAudio {
   int _next = 0;
 
   // ---- фоновая музыка ----
-  AudioPlayer? _music;
+  // Гэплесс своими руками: платформенные лупы (и MediaPlayer, и SoundPool)
+  // дают слышимую щель на стыке. Поэтому два плеера запускают один и тот
+  // же кусок по кругу с перекрытием: хвост записан с затуханием, голова —
+  // с нарастанием, в перекрытии контент идентичен и суммируется в единицу.
+  static const _musicLoop = 20.0; // период запуска следующего круга, с
+  static const _musicXfade = 2.5; // перекрытие, с
+  final List<AudioPlayer> _musicPair = [];
+  int _musicNext = 0;
+  Timer? _musicTimer;
   Uint8List? _musicWav;
   bool _musicOn = false;
-  bool _musicPausedByLifecycle = false;
 
   /// init() завершён — аудио-плагин доступен, музыку можно запускать.
   /// До этого желание «музыка включена» просто запоминается: в тестах
@@ -81,9 +89,7 @@ class GameAudio {
     _musicOn = on;
     if (!_ready) return; // применится, когда init() поднимет плагин
     if (!on) {
-      try {
-        await _music?.stop();
-      } catch (_) {}
+      await _stopMusic();
       return;
     }
     await _startMusic();
@@ -91,41 +97,55 @@ class GameAudio {
 
   Future<void> _startMusic() async {
     try {
-      if (_music == null) {
-        final p = AudioPlayer();
-        // lowLatency (SoundPool на Android) зацикливает БЕЗ щели на стыке —
-        // MediaPlayer при loop даёт слышимую паузу между повторами.
-        await p.setPlayerMode(PlayerMode.lowLatency);
-        await p.setReleaseMode(ReleaseMode.loop);
-        await p.setVolume(.5);
-        _music = p;
+      if (_musicPair.isEmpty) {
+        for (var i = 0; i < 2; i++) {
+          final p = AudioPlayer();
+          await p.setReleaseMode(ReleaseMode.stop);
+          await p.setVolume(.5);
+          _musicPair.add(p);
+        }
       }
       _musicWav ??= _synthMusic();
-      await _music!.stop();
-      await _music!.play(BytesSource(_musicWav!, mimeType: 'audio/wav'));
+      _musicTimer?.cancel();
+      await _musicPair[0].stop();
+      await _musicPair[1].stop();
+      await _musicPair[0].play(BytesSource(_musicWav!, mimeType: 'audio/wav'));
+      _musicNext = 1;
+      // Каждые _musicLoop секунд стартует второй плеер: хвост текущего
+      // круга и голова следующего перекрываются на _musicXfade секунд.
+      _musicTimer = Timer.periodic(
+          Duration(milliseconds: (_musicLoop * 1000).round()), (_) async {
+        final p = _musicPair[_musicNext];
+        _musicNext = 1 - _musicNext;
+        try {
+          await p.stop();
+          await p.play(BytesSource(_musicWav!, mimeType: 'audio/wav'));
+        } catch (_) {}
+      });
     } catch (_) {
       // Без аудио-движка музыки просто нет.
     }
   }
 
-  /// Пауза/возврат музыки вместе с приложением: игра не должна звучать
-  /// из фона.
-  Future<void> onAppPaused() async {
-    if (_musicOn && _music != null) {
-      _musicPausedByLifecycle = true;
+  Future<void> _stopMusic() async {
+    _musicTimer?.cancel();
+    _musicTimer = null;
+    for (final p in _musicPair) {
       try {
-        await _music!.pause();
+        await p.stop();
       } catch (_) {}
     }
   }
 
+  /// Пауза/возврат музыки вместе с приложением: игра не должна звучать
+  /// из фона. Возврат перезапускает петлю с начала — так фазы двух
+  /// плееров гарантированно сходятся.
+  Future<void> onAppPaused() async {
+    if (_musicOn) await _stopMusic();
+  }
+
   Future<void> onAppResumed() async {
-    if (_musicOn && _musicPausedByLifecycle) {
-      _musicPausedByLifecycle = false;
-      try {
-        await _music!.resume();
-      } catch (_) {}
-    }
+    if (_musicOn && _ready) await _startMusic();
   }
 
   /// Осциллятор с экспоненциальным затуханием, как в WebAudio-версии.
@@ -223,8 +243,9 @@ class GameAudio {
   static const _musicRate = 16000;
 
   Uint8List _synthMusic() {
-    const loop = 20.0;
-    final n = (_musicRate * loop).round();
+    const loop = _musicLoop;
+    const xf = _musicXfade;
+    final n = (_musicRate * (loop + xf)).round();
     final data = Float64List(n);
 
     // Частота подгоняется к целому числу циклов на петлю — стык не щёлкает.
@@ -239,9 +260,18 @@ class GameAudio {
     ].map((c) => c.map(snap).toList()).toList();
     const amps = [.4, .22, .2, .17, .1];
 
-    for (var i = 0; i < n; i++) {
-      final t = i / _musicRate;
-      final x = t / loop * 4; // позиция в прогрессии, 0..4
+    // Мелодия колокольчиков — пентатоника ля-минора, редкая и тихая.
+    // Все ноты гаснут ДО конца петли (18.2 + 1.8 = 20.0).
+    const bells = [
+      (1.4, 659.25), (3.2, 880.0), (6.1, 587.33), (8.4, 523.25),
+      (11.2, 783.99), (13.6, 659.25), (16.1, 987.77), (18.2, 880.0),
+    ];
+
+    // Контент — функция позиции ВНУТРИ петли (tm = t mod loop): хвост
+    // файла в точности повторяет голову, а линейные края в перекрытии
+    // двух плееров суммируются в единицу — стык бесшовный.
+    double sample(double tm) {
+      final x = tm / loop * 4; // позиция в прогрессии, 0..4
       var s = 0.0;
       for (var ci = 0; ci < 4; ci++) {
         // cos^2-окно вокруг «своего» такта; соседние окна дают в сумме 1.
@@ -251,31 +281,31 @@ class GameAudio {
         final w = math.pow(math.cos(d * math.pi / 2), 2).toDouble();
         for (var k = 0; k < 5; k++) {
           // лёгкое «дыхание» голосов — целое число циклов на петлю
-          final lfo = .8 + .2 * math.sin(2 * math.pi * (k + 1) * t / loop + ci);
-          s += math.sin(2 * math.pi * chords[ci][k] * t) * amps[k] * w * lfo;
+          final lfo = .8 + .2 * math.sin(2 * math.pi * (k + 1) * tm / loop + ci);
+          s += math.sin(2 * math.pi * chords[ci][k] * tm) * amps[k] * w * lfo;
         }
         // Суб-бас: тонкая синусоида на октаву ниже баса аккорда.
-        s += math.sin(2 * math.pi * snap(chords[ci][0] / 2) * t) * .12 * w;
+        s += math.sin(2 * math.pi * snap(chords[ci][0] / 2) * tm) * .12 * w;
       }
-      data[i] = s * .15;
-    }
-
-    // Мелодия колокольчиков — пентатоника ля-минора, редкая и тихая.
-    const bells = [
-      (1.4, 659.25), (3.2, 880.0), (6.1, 587.33), (8.4, 523.25),
-      (11.2, 783.99), (13.6, 659.25), (16.1, 987.77), (18.2, 880.0),
-    ];
-    for (final (at, f) in bells) {
-      final start = (at * _musicRate).round();
-      final len = (_musicRate * 1.8).round();
-      for (var j = 0; j < len && start + j < n; j++) {
-        final t = j / _musicRate;
-        final env = math.pow(math.e, -t * 2.8) * math.min(1.0, t / .012);
-        data[start + j] += (math.sin(2 * math.pi * f * t) +
-                .35 * math.sin(2 * math.pi * f * 2 * t)) *
-            .04 *
+      for (final (at, f) in bells) {
+        final j = tm - at;
+        if (j < 0 || j > 1.8) continue;
+        final env = math.pow(math.e, -j * 2.8) * math.min(1.0, j / .012);
+        s += (math.sin(2 * math.pi * f * j) +
+                .35 * math.sin(2 * math.pi * f * 2 * j)) *
+            .27 *
             env;
       }
+      return s * .15;
+    }
+
+    for (var i = 0; i < n; i++) {
+      final t = i / _musicRate;
+      // Линейные края: нарастание в голове, затухание в хвосте.
+      final env = t < xf
+          ? t / xf
+          : (t > loop ? (1 - (t - loop) / xf).clamp(0.0, 1.0) : 1.0);
+      data[i] = sample(t % loop) * env;
     }
     return _wav(data, rate: _musicRate);
   }

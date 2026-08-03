@@ -67,9 +67,11 @@ class HubScreen extends StatelessWidget {
     final supply = <Widget>[
       StaggerIn(index: 0, child: _shopPanel(app)),
       const SizedBox(height: 12),
-      StaggerIn(index: 1, child: _WorkshopPanel(app: app)),
+      StaggerIn(index: 1, child: _convertPanel(app)),
       const SizedBox(height: 12),
-      StaggerIn(index: 2, child: _themesPanel(app)),
+      StaggerIn(index: 2, child: _WorkshopPanel(app: app)),
+      const SizedBox(height: 12),
+      StaggerIn(index: 3, child: _themesPanel(app)),
     ];
     return ContentColumn(
       child: ListView(
@@ -188,6 +190,53 @@ class HubScreen extends StatelessWidget {
             ),
           ),
         ],
+      ]),
+    );
+  }
+
+  /// Обмен избытка энергии на осколки: 40{bolt} → 1✦, до 2 в день.
+  Widget _convertPanel(AppState app) {
+    final left = AppState.convLimit - app.convUsed;
+    final can = app.canConvert;
+    return GamePanel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SectionTitle(app.lt('cvT')),
+        const SizedBox(height: 6),
+        Text(app.lt('cvD'),
+            style: const TextStyle(
+                fontFamily: Fonts.mono, fontSize: 9.5, height: 1.4, color: Pal.dim)),
+        const SizedBox(height: 10),
+        Pressable(
+          onTap: left > 0 ? app.convertEnergy : null,
+          child: Opacity(
+            opacity: left > 0 ? (can ? 1 : .6) : .4,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 52),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: can ? const Color(0x1500E5FF) : Colors.transparent,
+                border: Border.all(
+                    color: can ? const Color(0x7300E5FF) : Pal.line),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: IconText(
+                left > 0
+                    ? app
+                        .lt('cvBtn')
+                        .replaceAll('{n}', '${AppState.convCost}')
+                        .replaceAll('{k}', '$left')
+                    : app.lt('cvOut'),
+                style: TextStyle(
+                    fontFamily: Fonts.disp,
+                    fontSize: 11.5,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w700,
+                    color: can ? Pal.cyan : Pal.dim),
+              ),
+            ),
+          ),
+        ),
       ]),
     );
   }
@@ -788,19 +837,47 @@ class _TaskRow extends StatelessWidget {
                 ]),
               ),
               const SizedBox(width: 8),
-              isDone
-                  ? const Glyph(GlyphKind.check, size: 16, color: Pal.green)
-                  : Row(mainAxisSize: MainAxisSize.min, children: [
-                      Text('${t.cost}',
-                          style: TextStyle(
-                              fontFamily: Fonts.disp,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                              color: can ? Pal.yellow : Pal.dim)),
-                      const SizedBox(width: 2),
-                      GameIcon('bolt',
-                          size: 12, solid: true, color: can ? Pal.yellow : Pal.dim),
-                    ]),
+              // Что делать с задачей — видно сразу: активная превращается
+              // в явную кнопку «Построить · N⚡», недоступная — тусклая цена.
+              if (isDone)
+                const Glyph(GlyphKind.check, size: 16, color: Pal.green)
+              else if (can)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: const Color(0x24FFD400),
+                    border: Border.all(color: const Color(0x8CFFD400)),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text(app.lt('bld'),
+                        style: const TextStyle(
+                            fontFamily: Fonts.mono,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .6,
+                            color: Pal.yellow)),
+                    const SizedBox(width: 5),
+                    Text('${t.cost}',
+                        style: const TextStyle(
+                            fontFamily: Fonts.disp,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                            color: Pal.yellow)),
+                    const GameIcon('bolt', size: 11, solid: true, color: Pal.yellow),
+                  ]),
+                )
+              else
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text('${t.cost}',
+                      style: const TextStyle(
+                          fontFamily: Fonts.disp,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: Pal.dim)),
+                  const SizedBox(width: 2),
+                  const GameIcon('bolt', size: 12, solid: true, color: Pal.dim),
+                ]),
             ]),
           ),
         ),

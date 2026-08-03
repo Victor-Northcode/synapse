@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Сетевая таблица лидеров (dreamlo) на бесплатном тарифе отвечает
+     только по HTTP — разрешаем cleartext ТОЛЬКО для этого домена.
+     Данные: псевдоним и число очков, ничего личного. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false"/>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">dreamlo.com</domain>
+    </domain-config>
+</network-security-config>

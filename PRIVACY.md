@@ -7,10 +7,15 @@
 ## English
 
 ### What the game collects
-Nothing. No sign-up, no accounts, no servers of ours.
+No sign-up and no accounts.
 Progress, purchased themes, language and settings are stored on your device
 only and are removed when you delete the app. The "reset progress" button
 erases them at once.
+
+### Top players
+The global ranking receives only a random in-game nickname (like
+volt_fox_512) and a score number, sent to the dreamlo scoreboard service
+(dreamlo.com). It contains no personal data and cannot be linked to you.
 
 ### What the ads collect
 Rewarded videos are served by Google AdMob. To select ads and prevent fraud,
@@ -44,10 +49,16 @@ https://policies.google.com/privacy
 ## Русский
 
 ### Что собирает сама игра
-Ничего. Регистрации нет, аккаунтов нет, своих серверов у нас нет.
+Регистрации и аккаунтов нет.
 Прогресс, купленные темы, язык и настройки хранятся только на твоём
 устройстве и удаляются вместе с приложением. Кнопка «сбросить прогресс»
 стирает их сразу.
+
+### Топ игроков
+В общий рейтинг уходят только случайный игровой псевдоним (вида
+volt_fox_512) и число очков — на сервис таблиц рекордов dreamlo
+(dreamlo.com). Личных данных там нет, связать псевдоним с человеком
+невозможно.
 
 ### Что собирает реклама
 Ролики за награду показывает Google AdMob. Для подбора объявлений и защиты

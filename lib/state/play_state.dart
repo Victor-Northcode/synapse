@@ -139,6 +139,7 @@ class PlayState extends ChangeNotifier {
             (kind == 2 ? 0.73 : (kind == 1 ? 0.79 : 0.85)) *
             (1 + (app.timeBonus() - 1) * 0.5))
         .round();
+    movesMax += app.bonusMoves; // «Резервный контур» из мастерской
     movesMax = math.max(4, movesMax);
     if (liveEdge >= 0) movesMax = math.max(4, movesMax - 2);
     moves = movesMax;
@@ -170,6 +171,26 @@ class PlayState extends ChangeNotifier {
       alive = false;
       GameAudio.instance.tone(900, .16, 'sine', .05);
       Haptics.instance.buzz(33);
+    }
+    // «Диагностика» из мастерской: первое пересечение подсвечивается
+    // бесплатно на старте уровня.
+    if (app.hasScan && crossings > 0) {
+      for (var a = 0; a < edges.length && hiLite < 0; a++) {
+        for (var b = a + 1; b < edges.length; b++) {
+          if (shares(edges[a], edges[b])) continue;
+          if (segX(nodes[edges[a][0]], nodes[edges[a][1]], nodes[edges[b][0]],
+              nodes[edges[b][1]])) {
+            hiLite = a;
+            break;
+          }
+        }
+      }
+      if (hiLite >= 0) {
+        Future.delayed(const Duration(milliseconds: 2600), () {
+          hiLite = -1;
+          notifyListeners();
+        });
+      }
     }
     notifyListeners();
   }

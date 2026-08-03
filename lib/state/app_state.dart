@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../core/ads.dart';
 import '../core/audio.dart';
 import '../core/haptics.dart';
+import '../core/net_board.dart';
 import '../core/notifications.dart';
 import '../core/storage.dart';
 import '../data/game_data.dart';
@@ -15,6 +16,7 @@ import '../data/upgrade_data.dart';
 import '../data/strings.dart';
 import '../data/task_data.dart';
 import '../game/level.dart' show hash32;
+import '../game/rivals.dart' show makeNick;
 
 /// Задача датацентра.
 class HubTask {
@@ -54,6 +56,12 @@ class AppState extends ChangeNotifier {
   int weekKey = 0;
   List<int> wgp = [0, 0, 0];
   List<bool> wgDone = [false, false, false];
+
+  /// Псевдоним для сетевого топа (генерируется один раз, без личного).
+  String nick = '';
+
+  /// Обменов энергии на осколки сегодня (лимит 2).
+  int convUsed = 0;
   Map<String, int> inv = {'cut': 0, 'stab': 0, 'auto': 0};
   int adShards = 0;
   int adItems = 0; // предметы за ролик, до 3 в день
@@ -198,6 +206,8 @@ class AppState extends ChangeNotifier {
       weekKey = (sv['wkk'] as num?)?.toInt() ?? 0;
       if (sv['wgp'] is List) wgp = [for (final v in sv['wgp'] as List) (v as num).toInt()];
       if (sv['wgd'] is List) wgDone = [for (final v in sv['wgd'] as List) v == true];
+      nick = sv['nk'] as String? ?? '';
+      convUsed = (sv['cvd'] as num?)?.toInt() ?? 0;
       if (sv['inv'] is Map) {
         final m = sv['inv'] as Map;
         inv = {
@@ -238,6 +248,10 @@ class AppState extends ChangeNotifier {
     } else {
       lang = detectLang();
     }
+    if (nick.isEmpty) {
+      nick = makeNick(math.Random());
+      save();
+    }
     GameAudio.instance.enabled = soundOn;
     GameAudio.instance.setMusicEnabled(musicOn);
     Haptics.instance.enabled = vibroOn;
@@ -259,6 +273,8 @@ class AppState extends ChangeNotifier {
       'wkk': weekKey,
       'wgp': wgp,
       'wgd': wgDone,
+      'nk': nick,
+      'cvd': convUsed,
       'inv': inv,
       'ads': adShards,
       'adb': adItems,
@@ -388,6 +404,9 @@ class AppState extends ChangeNotifier {
     gDone = [false, false, false];
     adShards = 0;
     adItems = 0;
+    convUsed = 0;
+    // «Запасная подсказка» из мастерской: +1 в день за каждый уровень.
+    hintStock += dailyHintBonus;
     if (prev.isNotEmpty) {
       final y = DateTime.now().toUtc().subtract(const Duration(days: 1));
       final yk = '${y.year}-${y.month}-${y.day}';
@@ -470,6 +489,14 @@ class AppState extends ChangeNotifier {
     weekHit(0);
     if (lvl > bestLevel) bestLevel = lvl;
     if (streak > bestStreak) bestStreak = streak;
+    // Очки в сетевой топ — в фоне, ошибки сети игру не трогают.
+    NetBoard.instance
+        .submit(
+            nick: nick,
+            allTime: totalWins,
+            weeklyScore: wgp[0],
+            week: weekKey)
+        .ignore();
     final after = operatorLevel;
     if (after > before) {
       shards += 2;
@@ -542,6 +569,34 @@ class AppState extends ChangeNotifier {
 
   // ---------- магазин ----------
   int hintPrice() => 6 + math.min(15, hintBought);
+
+  /// Обмен энергии на осколки: 40{bolt} → 1✦, до двух раз в день.
+  /// Сток для избытка энергии: когда задачи дня уже построены, компьют
+  /// не копится мёртвым грузом.
+  static const convCost = 40;
+  static const convLimit = 2;
+  bool get canConvert => free >= convCost && convUsed < convLimit;
+
+  void convertEnergy() {
+    checkDay();
+    if (convUsed >= convLimit) return;
+    if (free < convCost) {
+      onEvent?.call(GameEvent(GameEventType.toast,
+          text: t('goalNeed')
+              .replaceAll('{name}', lt('cvT'))
+              .replaceAll('{n}', '${convCost - free}')));
+      Haptics.instance.reject();
+      return;
+    }
+    spent += convCost;
+    shards++;
+    convUsed++;
+    save();
+    GameAudio.instance.chord([660, 880]);
+    Haptics.instance.success();
+    onEvent?.call(const GameEvent(GameEventType.toast, text: '+1✦'));
+    notifyListeners();
+  }
 
   bool buyBooster(int bi) {
     final b = kBoosters[bi];
