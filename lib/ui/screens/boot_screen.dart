@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/audio.dart';
 import '../../core/palette.dart';
 
 /// Экран загрузки: штекер защёлкивается, из него растут кабели,
@@ -19,6 +20,8 @@ class _BootScreenState extends State<BootScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    // Фирменный «взлёт»: свип питания и расцвет аккорда под анимацию.
+    GameAudio.instance.bootRiser();
     _c.forward().whenComplete(widget.onDone);
   }
 

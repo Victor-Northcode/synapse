@@ -5,6 +5,10 @@ import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 
+/// Музыкальная сцена: меню (спокойный эмбиент) и игра (пульс и арпеджио).
+/// У загрузки трека нет — там короткий фирменный «взлёт» (bootRiser).
+enum MusicScene { menu, play }
+
 /// Синтезатор звуков игры — порт tone()/chord()/noiseBurst() из WebAudio.
 /// Звук генерируется в PCM-WAV на лету и кэшируется по параметрам.
 ///
@@ -27,15 +31,18 @@ class GameAudio {
   // дают слышимую щель на стыке. Поэтому два плеера запускают один и тот
   // же трек по кругу с перекрытием: хвост записан с затуханием, голова —
   // с нарастанием, в перекрытии контент идентичен и суммируется в единицу.
-  // Трек длинный (2 м 40 с, живая структура), а кроссфейд широкий (6 с):
-  // даже секундная задержка старта второго плеера растворяется в нём.
-  static const _musicLoop = 160.0; // период запуска следующего круга, с
-  static const _musicXfade = 6.0; // перекрытие, с
+  // Треки длинные (живая структура), а кроссфейд широкий: даже секундная
+  // задержка старта второго плеера растворяется в нём. У каждой сцены
+  // свой трек, период и перекрытие.
+  static const _menuLoop = 160.0, _menuXfade = 6.0;
+  static const _playLoop = 80.0, _playXfade = 5.0;
   final List<AudioPlayer> _musicPair = [];
   int _musicNext = 0;
   Timer? _musicTimer;
-  Uint8List? _musicWav;
+  final Map<MusicScene, Uint8List> _tracks = {};
+  MusicScene _scene = MusicScene.menu;
   bool _musicOn = false;
+  int _musicGen = 0; // защита от гонок при смене сцены
 
   /// init() завершён — аудио-плагин доступен, музыку можно запускать.
   /// До этого желание «музыка включена» просто запоминается: в тестах
@@ -98,40 +105,63 @@ class GameAudio {
     await _startMusic();
   }
 
+  /// Смена музыкальной сцены: меню ↔ игра. Текущий трек мягко гаснет,
+  /// новый начинается с начала.
+  Future<void> setMusicScene(MusicScene s) async {
+    if (_scene == s) return;
+    _scene = s;
+    if (!_musicOn || !_ready) return;
+    await _fadeOutStop();
+    if (_musicOn && _scene == s) await _startMusic();
+  }
+
+  double _loopOf(MusicScene s) => s == MusicScene.menu ? _menuLoop : _playLoop;
+
+  Future<Uint8List> _trackOf(MusicScene s) async {
+    final cached = _tracks[s];
+    if (cached != null) return cached;
+    // Синтез тяжёлый (миллионы сэмплов) — уводим в изолят, чтобы
+    // интерфейс не дёргался; без изолята (веб) считаем на месте.
+    final builder = s == MusicScene.menu ? _buildMenuMusic : _buildPlayMusic;
+    Uint8List wav;
+    try {
+      wav = await Isolate.run(builder);
+    } catch (_) {
+      wav = builder();
+    }
+    return _tracks[s] = wav;
+  }
+
   Future<void> _startMusic() async {
+    final gen = ++_musicGen;
     try {
       if (_musicPair.isEmpty) {
         for (var i = 0; i < 2; i++) {
           final p = AudioPlayer();
           await p.setReleaseMode(ReleaseMode.stop);
-          await p.setVolume(.5);
           _musicPair.add(p);
         }
       }
-      // Синтез трека тяжёлый (~2.7 млн сэмплов) — уводим в изолят,
-      // чтобы интерфейс не дёргался; без изолята (веб) считаем на месте.
-      if (_musicWav == null) {
-        try {
-          _musicWav = await Isolate.run(_buildMusic);
-        } catch (_) {
-          _musicWav = _buildMusic();
-        }
-      }
-      if (!_musicOn) return; // выключили, пока считался трек
+      final scene = _scene;
+      final wav = await _trackOf(scene);
+      // Пока считался трек, музыку выключили или сменили сцену.
+      if (!_musicOn || gen != _musicGen || scene != _scene) return;
       _musicTimer?.cancel();
-      await _musicPair[0].stop();
-      await _musicPair[1].stop();
-      await _musicPair[0].play(BytesSource(_musicWav!, mimeType: 'audio/wav'));
+      for (final p in _musicPair) {
+        await p.stop();
+        await p.setVolume(.5);
+      }
+      await _musicPair[0].play(BytesSource(wav, mimeType: 'audio/wav'));
       _musicNext = 1;
-      // Каждые _musicLoop секунд стартует второй плеер: хвост текущего
-      // круга и голова следующего перекрываются на _musicXfade секунд.
+      // Каждые loop секунд стартует второй плеер: хвост текущего круга
+      // и голова следующего перекрываются на ширину кроссфейда.
       _musicTimer = Timer.periodic(
-          Duration(milliseconds: (_musicLoop * 1000).round()), (_) async {
+          Duration(milliseconds: (_loopOf(scene) * 1000).round()), (_) async {
         final p = _musicPair[_musicNext];
         _musicNext = 1 - _musicNext;
         try {
           await p.stop();
-          await p.play(BytesSource(_musicWav!, mimeType: 'audio/wav'));
+          await p.play(BytesSource(wav, mimeType: 'audio/wav'));
         } catch (_) {}
       });
     } catch (_) {
@@ -139,7 +169,27 @@ class GameAudio {
     }
   }
 
+  /// Быстрое затухание перед сменой сцены — без щелчка обрыва.
+  Future<void> _fadeOutStop() async {
+    _musicTimer?.cancel();
+    _musicTimer = null;
+    try {
+      for (var v = 4; v >= 0; v--) {
+        for (final p in _musicPair) {
+          await p.setVolume(.5 * v / 5);
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 55));
+      }
+    } catch (_) {}
+    for (final p in _musicPair) {
+      try {
+        await p.stop();
+      } catch (_) {}
+    }
+  }
+
   Future<void> _stopMusic() async {
+    _musicGen++;
     _musicTimer?.cancel();
     _musicTimer = null;
     for (final p in _musicPair) {
@@ -147,6 +197,54 @@ class GameAudio {
         await p.stop();
       } catch (_) {}
     }
+  }
+
+  /// Фирменный «взлёт» на экране загрузки: свип вверх, россыпь
+  /// пентатоники и мягкий аккордовый расцвет. Одноразовый, ~2.3 с.
+  void bootRiser() {
+    if (!enabled) return;
+    final wav = _cache.putIfAbsent('bootRiser', _synthBootRiser);
+    if (_pool.isEmpty) {
+      // Холодный старт: пул плееров ещё поднимается — пробуем чуть позже.
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (enabled && _pool.isNotEmpty) _play(wav);
+      });
+      return;
+    }
+    _play(wav);
+  }
+
+  static Uint8List _synthBootRiser() {
+    final n = (_rate * 2.3).round();
+    final data = Float64List(n);
+    for (var i = 0; i < n; i++) {
+      final t = i / _rate;
+      var s = 0.0;
+      // Свип 150→640 Гц за 1.15 с — «включение питания».
+      if (t < 1.15) {
+        final k = t / 1.15;
+        final f = 150 * math.pow(640 / 150, k);
+        final env = math.sin(math.pi * k) * .5;
+        s += math.sin(2 * math.pi * f * t) * env * .5;
+      }
+      // Россыпь: A4 → C5 → E5.
+      for (final (at, f) in [(1.05, 440.0), (1.2, 523.25), (1.35, 659.25)]) {
+        final j = t - at;
+        if (j < 0 || j > .9) continue;
+        final env = math.pow(math.e, -j * 5) * math.min(1.0, j / .008);
+        s += math.sin(2 * math.pi * f * j) * .22 * env;
+      }
+      // Аккордовый расцвет Am(add9) с 1.15 с.
+      if (t > 1.15) {
+        final j = t - 1.15;
+        final env = math.min(1.0, j / .25) * (1 - (j / 1.15)).clamp(0.0, 1.0);
+        for (final (f, a) in [(220.0, .3), (261.63, .22), (329.63, .2), (493.88, .12)]) {
+          s += math.sin(2 * math.pi * f * j) * a * env * .5;
+        }
+      }
+      data[i] = s * .16;
+    }
+    return _wav(data);
   }
 
   /// Пауза/возврат музыки вместе с приложением: игра не должна звучать
@@ -250,14 +348,15 @@ class GameAudio {
   /// а буфер остаётся скромным.
   static const _musicRate = 16000;
 
-  /// Для тестов: собранный трек и его параметры.
-  static Uint8List debugBuildMusic() => _buildMusic();
+  /// Для тестов: собранные треки и их параметры.
+  static Uint8List debugBuildTrack(MusicScene s) =>
+      s == MusicScene.menu ? _buildMenuMusic() : _buildPlayMusic();
   static int get debugMusicRate => _musicRate;
-  static double get debugMusicLoop => _musicLoop;
-  static double get debugMusicXfade => _musicXfade;
+  static (double, double) debugLoopXfade(MusicScene s) =>
+      s == MusicScene.menu ? (_menuLoop, _menuXfade) : (_playLoop, _playXfade);
 
-  /// Трек 160 секунд с живой структурой (статический — считается в
-  /// изоляте). Аккорды Am → F → C → G крутятся по 5 секунд весь трек,
+  /// Трек МЕНЮ: 160 секунд с живой структурой (статический — считается
+  /// в изоляте). Аккорды Am → F → C → G крутятся по 5 секунд весь трек,
   /// а слои приходят и уходят, как в настоящем эмбиент-электро:
   ///   0–40   пэд и редкие колокольчики — спокойное вступление
   ///   40–80  + арпеджио-перебор с эхом
@@ -267,9 +366,9 @@ class GameAudio {
   ///   вступления, поэтому повтор через 2 м 40 с не ощущается повтором.
   /// Хвост файла (6 с) повторяет голову с линейным затуханием — при
   /// наложении двух плееров стык суммируется в единицу.
-  static Uint8List _buildMusic() {
-    const loop = _musicLoop;
-    const xf = _musicXfade;
+  static Uint8List _buildMenuMusic() {
+    const loop = _menuLoop;
+    const xf = _menuXfade;
     final n = (_musicRate * (loop + xf)).round();
     final data = Float64List(n);
 
@@ -387,17 +486,115 @@ class GameAudio {
       data[i] = sample(t % loop, i) * env;
     }
 
-    // Нормализация: пик к 0.82 — громко, но без клиппинга и треска.
+    _normalize(data);
+    return _wav(data, rate: _musicRate);
+  }
+
+  /// Нормализация: пик к 0.82 — громко, но без клиппинга и треска.
+  static void _normalize(Float64List data) {
     var peak = 0.0;
     for (final v in data) {
       peak = math.max(peak, v.abs());
     }
     if (peak > 0) {
       final k = .82 / peak;
-      for (var i = 0; i < n; i++) {
+      for (var i = 0; i < data.length; i++) {
         data[i] *= k;
       }
     }
+  }
+
+  /// Трек ИГРЫ: 80 секунд, собраннее и «сочнее» меню — ровный пульс
+  /// суб-баса, бегущее арпеджио шестнадцатыми с эхом, лёгкий воздушный
+  /// пэд и хэты в середине. Аккорды те же (Am → F → C → G), но по 4
+  /// секунды — темп ощущается выше, держит фокус, не отвлекая от поля.
+  static Uint8List _buildPlayMusic() {
+    const loop = _playLoop;
+    const xf = _playXfade;
+    final n = (_musicRate * (loop + xf)).round();
+    final data = Float64List(n);
+
+    double snap(double f) => (f * 16).roundToDouble() / 16;
+    final chords = [
+      [110.0, 164.81, 220.0, 261.63, 329.63], // Am
+      [87.31, 174.61, 220.0, 261.63, 349.23], // F
+      [130.81, 196.0, 261.63, 329.63, 392.0], // C
+      [98.0, 146.83, 246.94, 293.66, 392.0], // G
+    ].map((c) => c.map(snap).toList()).toList();
+
+    const beat = .5; // суб-пульс, 120 bpm
+    const step = .25; // арпеджио восьмыми
+    const arpPattern = [0, 4, 2, 4, 1, 4, 3, 4, 0, 4, 2, 3, 4, 3, 2, 1];
+
+    double ramp(double t, double a, double b) =>
+        ((t - a) / (b - a)).clamp(0.0, 1.0);
+
+    List<double> chordAt(double t) => chords[((t % 16) / 4).floor() % 4];
+
+    // Воздушный пэд — верхние голоса, тише, чем в меню.
+    double pad(double tm) {
+      final ct = tm % 16;
+      final x = ct / 4;
+      var s = 0.0;
+      for (var ci = 0; ci < 4; ci++) {
+        var d = (x - ci).abs();
+        if (d > 2) d = 4 - d;
+        if (d >= 1) continue;
+        final w = math.pow(math.cos(d * math.pi / 2), 2).toDouble();
+        for (var k = 2; k < 5; k++) {
+          final lfo = .8 + .2 * math.sin(2 * math.pi * (k + 1) * ct / 16 + ci);
+          s += math.sin(2 * math.pi * chords[ci][k] * ct) * .16 * w * lfo;
+        }
+      }
+      return s;
+    }
+
+    double sub(double tm) {
+      final b = (tm / beat).floor();
+      final tau = tm - b * beat;
+      final f = chordAt(b * beat)[0] / 2;
+      // Тело + короткий панч сверху — пульс читается на телефонном динамике.
+      return math.sin(2 * math.pi * f * tau) * math.pow(math.e, -tau * 4) +
+          .35 * math.sin(2 * math.pi * f * 4 * tau) * math.pow(math.e, -tau * 26);
+    }
+
+    double arpNote(double tm) {
+      final st = (tm / step).floor();
+      final tau = tm - st * step;
+      final ch = chordAt(st * step);
+      final f = ch[arpPattern[st % arpPattern.length] % ch.length] * 2;
+      final env = math.pow(math.e, -tau * 8) * math.min(1.0, tau / .006);
+      return (math.sin(2 * math.pi * f * tau) +
+              .3 * math.sin(2 * math.pi * f * 2 * tau)) *
+          env;
+    }
+
+    double hat(double tm, int i) {
+      final tau = (tm + beat / 2) % beat; // офф-бит
+      if (tau > .05) return 0;
+      final r = (math.sin(i * 12.9898) * 43758.5453);
+      final noise = (r - r.floorToDouble()) * 2 - 1;
+      return noise * math.pow(math.e, -tau * 110);
+    }
+
+    double sample(double tm, int i) {
+      // Хэты — только в середине петли: края чистые, стык бесшовный.
+      final hatG = ramp(tm, 20, 26) - ramp(tm, 58, 68);
+      var s = pad(tm);
+      s += sub(tm) * .5;
+      s += (arpNote(tm) + .4 * arpNote(math.max(0, tm - step * 1.5))) * .2;
+      if (hatG > 0) s += hat(tm, i) * .06 * hatG;
+      return s;
+    }
+
+    for (var i = 0; i < n; i++) {
+      final t = i / _musicRate;
+      final env = t < xf
+          ? t / xf
+          : (t > loop ? (1 - (t - loop) / xf).clamp(0.0, 1.0) : 1.0);
+      data[i] = sample(t % loop, i) * env;
+    }
+    _normalize(data);
     return _wav(data, rate: _musicRate);
   }
 

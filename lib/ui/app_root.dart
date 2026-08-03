@@ -174,6 +174,7 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
     _retire(old);
     p.start(lvl);
     _cardVisible = p.pendingCard != null;
+    GameAudio.instance.setMusicScene(MusicScene.play);
   }
 
   void _quitToHub() {
@@ -183,6 +184,7 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
       showResult = false;
     });
     _retire(old);
+    GameAudio.instance.setMusicScene(MusicScene.menu);
   }
 
   Future<void> _hintViaAd() async {
