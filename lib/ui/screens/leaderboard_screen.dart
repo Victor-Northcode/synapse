@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:games_services/games_services.dart';
 
 import '../../core/leaderboard.dart';
+import '../../core/name_filter.dart';
 import '../../core/net_board.dart';
 import '../../core/palette.dart';
 import '../../game/rivals.dart';
@@ -50,8 +51,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     _load();
   }
 
+  /// Имя из Game Center / Play Игр показывается как есть, но проходит
+  /// цензуру: мат на любом языке подменяется стабильным фейковым ником.
   RivalRow _fromScore(LeaderboardScoreData r, {bool mine = false}) => RivalRow(
-      r.rank, mine ? widget.app.lt('lbYou') : r.scoreHolder.displayName,
+      r.rank, mine ? widget.app.lt('lbYou') : safeName(r.scoreHolder.displayName),
       r.rawScore, mine);
 
   Future<void> _load() async {
@@ -113,8 +116,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           RivalRow? mine;
           for (var i = 0; i < entries.length; i++) {
             final isMe = entries[i].$1 == app.nick;
+            // Сетевая доска тоже пишется чужими людьми — та же цензура.
             final row = RivalRow(i + 1,
-                isMe ? app.lt('lbYou') : entries[i].$1, entries[i].$2, isMe);
+                isMe ? app.lt('lbYou') : safeName(entries[i].$1),
+                entries[i].$2, isMe);
             rows2.add(row);
             if (isMe) mine = row;
           }
