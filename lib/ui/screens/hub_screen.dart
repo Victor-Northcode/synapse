@@ -259,11 +259,31 @@ class HubScreen extends StatelessWidget {
     );
   }
 
+  /// Кнопка-пилюля с ценой в осколках.
+  Widget _pricePill(String price, {required bool can}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: can ? const Color(0x1500E5FF) : Colors.transparent,
+        border: Border.all(color: can ? const Color(0x7300E5FF) : Pal.line),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: IconText(price,
+          style: const TextStyle(
+              fontFamily: Fonts.disp,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              color: Pal.cyan)),
+    );
+  }
+
   /// Карточка товара: иконка и запас сверху, полное название и полное
-  /// описание (ничего не обрезается), внизу — цена во всю ширину.
-  /// Обычно внизу цена в осколках; когда осколков не хватает и остался
-  /// дневной лимит роликов — ВМЕСТО цены кнопка «за рекламу» (обе
-  /// одновременно не показываются никогда).
+  /// описание (ничего не обрезается), внизу — покупка.
+  /// Обычно это одна кнопка с ценой. Когда осколков не хватает и остался
+  /// часовой лимит роликов — ДВЕ компактные кнопки рядом: цена и ролик.
+  /// Без длинных слов: только цифры и значки.
   Widget _shopCard({
     required bool can,
     required VoidCallback onTap,
@@ -272,7 +292,7 @@ class HubScreen extends StatelessWidget {
     required String name,
     required String desc,
     required String price,
-    String adLabel = '',
+    int adLeft = 0,
     VoidCallback? onAdTap,
   }) {
     return Pressable(
@@ -330,57 +350,44 @@ class HubScreen extends StatelessWidget {
           if (onAdTap == null)
             // Цель всегда на виду: цена показана даже когда не хватает —
             // так есть ради чего копить.
-            Opacity(
-              opacity: can ? 1 : .5,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: can ? const Color(0x1500E5FF) : Colors.transparent,
-                  border: Border.all(
-                      color: can ? const Color(0x7300E5FF) : Pal.line),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: IconText(price,
-                    style: const TextStyle(
-                        fontFamily: Fonts.disp,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        color: Pal.cyan)),
-              ),
-            )
+            Opacity(opacity: can ? 1 : .5, child: _pricePill(price, can: can))
           else
-            // Осколков не хватает, лимит роликов не исчерпан — товар
-            // выдаётся за рекламу. Кнопка стоит ВМЕСТО цены.
-            Pressable(
-              onTap: onAdTap,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0x1CFFD400),
-                  border: Border.all(color: const Color(0x66FFD400)),
-                  borderRadius: BorderRadius.circular(999),
+            // Две маленькие кнопки: слева цена (тап объяснит, сколько не
+            // хватает), справа ролик со счётчиком остатка «×N».
+            Row(children: [
+              Expanded(
+                child: Pressable(
+                  onTap: onTap,
+                  child: Opacity(
+                      opacity: .5, child: _pricePill(price, can: false)),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const GameIcon('tv', size: 12, color: Pal.yellow),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(adLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontFamily: Fonts.disp,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 10,
-                            letterSpacing: .6,
-                            color: Pal.yellow)),
-                  ),
-                ]),
               ),
-            ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Pressable(
+                  onTap: onAdTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0x1CFFD400),
+                      border: Border.all(color: const Color(0x66FFD400)),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const GameIcon('tv', size: 13, color: Pal.yellow),
+                      const SizedBox(width: 5),
+                      Text('×$adLeft',
+                          style: const TextStyle(
+                              fontFamily: Fonts.disp,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              color: Pal.yellow)),
+                    ]),
+                  ),
+                ),
+              ),
+            ]),
         ]),
       ),
     );
@@ -397,8 +404,7 @@ class HubScreen extends StatelessWidget {
       name: app.tl('bn')[bi],
       desc: app.tl('bd')[bi],
       price: '${b.cost}✦',
-      // Остаток часового лимита виден прямо на кнопке: «за рекламу · 2».
-      adLabel: '${app.t('adBuy')} · ${app.adItemsLeft}',
+      adLeft: app.adItemsLeft,
       onAdTap: !can && app.canAdItem ? () => app.watchAdForItem(b.key) : null,
     );
   }
@@ -413,7 +419,7 @@ class HubScreen extends StatelessWidget {
       name: app.t('hintBuy'),
       desc: app.t('hintBuyD'),
       price: '${app.hintPrice()}✦',
-      adLabel: '${app.t('adBuy')} · ${app.adItemsLeft}',
+      adLeft: app.adItemsLeft,
       onAdTap: !can && app.canAdItem ? () => app.watchAdForItem('hint') : null,
     );
   }
