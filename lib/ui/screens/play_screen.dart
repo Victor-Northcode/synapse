@@ -103,15 +103,19 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
         Padding(
           padding: EdgeInsets.fromLTRB(l.gutter, 0, l.gutter, l.isShort ? 10 : 14),
           child: Row(children: [
-            _boost(app, play, 0, 'cut'),
+            // На планшете кнопки на шаг выше — попадать пальцем проще.
+            _boost(app, play, 0, 'cut', height: l.isTablet ? 54 : 46),
             const SizedBox(width: 9),
-            _boost(app, play, 1, 'stab'),
+            _boost(app, play, 1, 'stab', height: l.isTablet ? 54 : 46),
             const SizedBox(width: 9),
-            _boost(app, play, 2, 'auto'),
+            _boost(app, play, 2, 'auto', height: l.isTablet ? 54 : 46),
             const SizedBox(width: 9),
-            Expanded(flex: 5, child: _hintBtn(app, play)),
+            Expanded(
+                flex: 5,
+                child: _hintBtn(app, play, height: l.isTablet ? 54 : 46)),
             const SizedBox(width: 9),
-            Expanded(flex: 4, child: _quitBtn(play)),
+            Expanded(
+                flex: 4, child: _quitBtn(play, height: l.isTablet ? 54 : 46)),
           ]),
         ),
       ]),
@@ -119,6 +123,9 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
   }
 
   /// Альбом (планшет): поле во всю высоту, управление колонкой справа.
+  /// Панель собрана, а не рассыпана: статус и ходы — карточкой по
+  /// центру, бустеры — широкими кнопками с названиями (на планшете
+  /// есть место, чтобы не заставлять игрока угадывать по значку).
   Widget _landscape(AppState app, PlayState play, Layout l) {
     return Padding(
       padding: EdgeInsets.all(l.gutter * .75),
@@ -131,30 +138,116 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
           ),
         ),
         SizedBox(width: l.gutter),
-        SizedBox(
-          width: 230,
-          child: Column(children: [
-            const Spacer(flex: 2),
-            _statusRow(app, play, stacked: true),
-            const SizedBox(height: 18),
-            _movesRow(app, play),
-            const SizedBox(height: 8),
-            _movesBar(play),
-            const Spacer(flex: 5),
-            Row(children: [
-              _boost(app, play, 0, 'cut'),
-              const SizedBox(width: 8),
-              _boost(app, play, 1, 'stab'),
-              const SizedBox(width: 8),
-              _boost(app, play, 2, 'auto'),
-            ]),
-            const SizedBox(height: 9),
-            SizedBox(width: double.infinity, child: _hintBtn(app, play)),
-            const SizedBox(height: 9),
-            SizedBox(width: double.infinity, child: _quitBtn(play)),
-          ]),
-        ),
+        // На коротком альбоме (телефон боком, сплит-скрин) панель
+        // ужимается до компактной, иначе не влезает по высоте.
+        l.isShort
+            ? SizedBox(
+                width: 230,
+                child: Column(children: [
+                  const Spacer(flex: 2),
+                  _statusRow(app, play, stacked: true),
+                  const SizedBox(height: 14),
+                  _movesRow(app, play),
+                  const SizedBox(height: 8),
+                  _movesBar(play),
+                  const Spacer(flex: 5),
+                  Row(children: [
+                    _boost(app, play, 0, 'cut'),
+                    const SizedBox(width: 8),
+                    _boost(app, play, 1, 'stab'),
+                    const SizedBox(width: 8),
+                    _boost(app, play, 2, 'auto'),
+                  ]),
+                  const SizedBox(height: 9),
+                  SizedBox(width: double.infinity, child: _hintBtn(app, play)),
+                  const SizedBox(height: 9),
+                  SizedBox(width: double.infinity, child: _quitBtn(play)),
+                ]),
+              )
+            : SizedBox(
+                width: 300,
+                child: Column(children: [
+                  const Spacer(flex: 2),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
+                    decoration: BoxDecoration(
+                      color: Pal.panel.withValues(alpha: .6),
+                      border: Border.all(color: Pal.line),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      _statusRow(app, play, stacked: true),
+                      const SizedBox(height: 20),
+                      _movesRow(app, play),
+                      const SizedBox(height: 10),
+                      _movesBar(play),
+                    ]),
+                  ),
+                  const Spacer(flex: 3),
+                  _boostWide(app, play, 0, 'cut'),
+                  const SizedBox(height: 9),
+                  _boostWide(app, play, 1, 'stab'),
+                  const SizedBox(height: 9),
+                  _boostWide(app, play, 2, 'auto'),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                      width: double.infinity,
+                      child: _hintBtn(app, play, height: 54)),
+                  const SizedBox(height: 9),
+                  SizedBox(
+                      width: double.infinity,
+                      child: _quitBtn(play, height: 54)),
+                ]),
+              ),
       ]),
+    );
+  }
+
+  /// Широкая кнопка бустера для планшетной панели: значок, название и
+  /// запас — видно, что это и сколько осталось, без угадывания.
+  Widget _boostWide(AppState app, PlayState play, int bi, String key) {
+    final count = app.inv[key] ?? 0;
+    final noTarget = count > 0 && play.alive && !play.boostHasTarget(key);
+    final dimmed = count <= 0 || !play.alive || noTarget;
+    const icons = ['cut', 'timer', 'target'];
+    return GestureDetector(
+      onLongPress: () =>
+          widget.onInfo('${app.tl('bn')[bi]} — ${app.tl('bd')[bi]}'),
+      child: Opacity(
+        opacity: dimmed ? .45 : 1,
+        child: Pressable(
+          onTap: () => play.useBoost(key),
+          child: Container(
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            decoration: BoxDecoration(
+              color: Pal.panel,
+              border: Border.all(color: Pal.line),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Row(children: [
+              GameIcon(icons[bi], size: 16, color: Pal.text),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(app.tl('bn')[bi],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontFamily: Fonts.mono,
+                        fontSize: 11.5,
+                        color: Pal.text)),
+              ),
+              Text('×$count',
+                  style: const TextStyle(
+                      fontFamily: Fonts.mono,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: Pal.cyan)),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 
@@ -312,8 +405,9 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _quitBtn(PlayState play) {
+  Widget _quitBtn(PlayState play, {double height = 46}) {
     return _mini(
+      height: height,
       onTap: () {
         play.quit();
         widget.onQuit();
@@ -369,13 +463,18 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
     ];
   }
 
-  Widget _mini({required Widget child, VoidCallback? onTap, bool disabled = false, Color? border}) {
+  Widget _mini(
+      {required Widget child,
+      VoidCallback? onTap,
+      bool disabled = false,
+      Color? border,
+      double height = 46}) {
     return Pressable(
       onTap: disabled ? null : onTap,
       child: Opacity(
         opacity: disabled ? .35 : 1,
         child: Container(
-          height: 46,
+          height: height,
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
@@ -389,7 +488,8 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _boost(AppState app, PlayState play, int bi, String key) {
+  Widget _boost(AppState app, PlayState play, int bi, String key,
+      {double height = 46}) {
     final count = app.inv[key] ?? 0;
     final noTarget = count > 0 && play.alive && !play.boostHasTarget(key);
     final dimmed = count <= 0 || !play.alive || noTarget;
@@ -404,6 +504,7 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
         child: Opacity(
           opacity: dimmed ? .45 : 1,
           child: _mini(
+            height: height,
             onTap: () => play.useBoost(key),
             // Узкая колонка на планшете: даём содержимому сжиматься,
             // иначе иконка со счётчиком не влезает в треть панели.
@@ -426,12 +527,13 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _hintBtn(AppState app, PlayState play) {
+  Widget _hintBtn(AppState app, PlayState play, {double height = 46}) {
     final hasStock = app.hintStock > 0;
     if (hasStock) {
       return GestureDetector(
         onLongPress: () => widget.onInfo(app.t('hintBuyD')),
         child: _mini(
+          height: height,
           onTap: () => play.useHint(),
           // «Hinweis 2» и подобные длинные подписи ужимаются, а не режутся.
           child: FittedBox(
@@ -447,6 +549,7 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
     return GestureDetector(
       onLongPress: () => widget.onInfo(app.t('hintAd')),
       child: _mini(
+        height: height,
         border: Pal.yellow,
         disabled: _adBusy,
         onTap: () async {
