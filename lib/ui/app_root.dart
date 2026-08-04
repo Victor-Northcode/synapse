@@ -77,6 +77,9 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed) {
       GameAudio.instance.onAppResumed();
       app.checkDay();
+      // Сеть могла появиться, пока приложение спало, — дошлём очки,
+      // не подтверждённые таблицами лидеров.
+      app.syncBoards().ignore();
       app.notify();
     }
   }

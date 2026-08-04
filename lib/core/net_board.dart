@@ -47,21 +47,26 @@ class NetBoard {
     }
   }
 
-  /// Отправить счёт (fire-and-forget): общий и недельный.
-  Future<void> submit({
+  /// Отправить счёт: общий и недельный. true — сервер подтвердил приём
+  /// (по этому признаку AppState понимает, что досылать больше нечего).
+  Future<bool> submit({
     required String nick,
     required int allTime,
     required int weeklyScore,
     required int week,
   }) async {
-    if (nick.isEmpty || allTime <= 0) return;
+    if (nick.isEmpty || allTime <= 0) return false;
     final n = Uri.encodeComponent(nick);
-    await _get('/lb/$_privAll/add/$n/$allTime');
+    final okAll = await _get('/lb/$_privAll/add/$n/$allTime') != null;
+    var okWeek = true;
     if (weeklyScore > 0) {
-      await _get('/lb/$_privWeek/add/${Uri.encodeComponent('w$week.$nick')}/$weeklyScore');
-      // Своя запись прошлой недели больше не нужна.
+      okWeek = await _get(
+              '/lb/$_privWeek/add/${Uri.encodeComponent('w$week.$nick')}/$weeklyScore') !=
+          null;
+      // Своя запись прошлой недели больше не нужна; неуспех не критичен.
       await _get('/lb/$_privWeek/delete/${Uri.encodeComponent('w${week - 1}.$nick')}');
     }
+    return okAll && okWeek;
   }
 
   /// Топ с сервера: (имя, счёт), по убыванию. null — сервер недоступен.

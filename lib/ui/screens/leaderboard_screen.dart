@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:games_services/games_services.dart';
 
+import '../../core/lb_cache.dart';
 import '../../core/leaderboard.dart';
 import '../../core/name_filter.dart';
 import '../../core/net_board.dart';
@@ -42,6 +43,13 @@ class LeaderboardScreen extends StatefulWidget {
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   bool weekly = true;
   bool loading = true;
+
+  /// Показан сохранённый топ: сеть пока не подтвердила свежие данные.
+  bool stale = false;
+
+  /// Номер запроса — быстрый свитч вкладок не даёт старому ответу
+  /// перезаписать новый.
+  int _loadSeq = 0;
   List<RivalRow> rows = [];
   RivalRow? me;
 
@@ -57,8 +65,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       r.rank, mine ? widget.app.lt('lbYou') : safeName(r.scoreHolder.displayName),
       r.rawScore, mine);
 
+  /// Свежие данные пришли: показать, запомнить в кэш.
+  void _accept(int seq, List<RivalRow> fresh, RivalRow? mine) {
+    if (!mounted || seq != _loadSeq) return;
+    LbCache.save(
+        weekly: weekly, week: widget.app.weekKey, rows: fresh, me: mine);
+    setState(() {
+      rows = fresh;
+      me = mine;
+      loading = false;
+      stale = false;
+    });
+  }
+
   Future<void> _load() async {
     final app = widget.app;
+    final seq = ++_loadSeq;
     final preview = widget.previewData;
     if (preview != null) {
       setState(() {
@@ -68,43 +90,54 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       });
       return;
     }
-    setState(() => loading = true);
+
+    // 0. Кэш последнего настоящего топа — мгновенно, без спиннера.
+    //    Перебои сети больше не «перекидывают» на другой список:
+    //    игрок всегда видит стабильный рейтинг, свежее подъедет фоном.
+    final cached = LbCache.load(
+        weekly: weekly, week: app.weekKey, youLabel: app.lt('lbYou'));
+    if (cached != null) {
+      setState(() {
+        rows = cached.$1;
+        me = cached.$2;
+        loading = false;
+        stale = true;
+      });
+    } else {
+      setState(() {
+        loading = true;
+        stale = false;
+      });
+    }
+
+    // Очки, не ушедшие без интернета, досылаются при каждом открытии.
+    app.syncBoards().ignore();
 
     // 1. Платформенные таблицы (Game Center / Play Игры) — если
-    //    настроены и реально отвечают.
+    //    настроены и реально отвечают (все вызовы с таймаутами).
     if (Lb.instance.available) {
       try {
         if (await Lb.instance.ensureSignedIn()) {
           final list = await Lb.instance.top(weekly: weekly);
           final my = await Lb.instance.myScore(weekly: weekly);
-          if (mounted && list != null && list.isNotEmpty) {
-            setState(() {
-              rows = [for (final r in list) _fromScore(r)];
-              me = my == null ? null : _fromScore(my, mine: true);
-              loading = false;
-            });
+          if (list != null && list.isNotEmpty) {
+            _accept(seq, [for (final r in list) _fromScore(r)],
+                my == null ? null : _fromScore(my, mine: true));
             return;
           }
         }
       } catch (_) {}
     }
-    if (!mounted) return;
+    if (!mounted || seq != _loadSeq) return;
 
     // 2. Сетевой топ (dreamlo): настоящие игроки со всех устройств.
-    //    Свой счёт досылается в фоне; если сервер его ещё не записал,
-    //    строка игрока подмешивается локально — ждать не нужно.
+    //    Если сервер ещё не записал свой счёт, строка игрока
+    //    подмешивается локально — ждать не нужно.
     if (NetBoard.instance.available) {
       final myScore = weekly ? app.wgp[0] : app.totalWins;
-      NetBoard.instance
-          .submit(
-              nick: app.nick,
-              allTime: app.totalWins,
-              weeklyScore: app.wgp[0],
-              week: app.weekKey)
-          .ignore();
       final net =
           await NetBoard.instance.top(weekly: weekly, week: app.weekKey);
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       if (net != null) {
         final entries = [...net];
         if (myScore > 0 && !entries.any((e) => e.$1 == app.nick)) {
@@ -123,17 +156,17 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             rows2.add(row);
             if (isMe) mine = row;
           }
-          setState(() {
-            rows = rows2;
-            me = mine;
-            loading = false;
-          });
+          _accept(seq, rows2, mine);
           return;
         }
       }
     }
+    if (!mounted || seq != _loadSeq) return;
 
-    // 3. Локальный рейтинг: детерминированный, без сети, всегда есть.
+    // 3. Сеть молчит. Есть кэш — остаёмся на нём (он уже на экране,
+    //    с пометкой «сохранённый топ»). Кэша нет — локальный рейтинг:
+    //    детерминированный, без сети, всегда есть.
+    if (cached != null) return;
     final localRows = buildRivals(
       myScore: weekly ? app.wgp[0] : app.totalWins,
       myName: app.lt('lbYou'),
@@ -405,6 +438,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       ];
     }
     return [
+      // Сеть молчит — честно говорим, что показан сохранённый топ.
+      if (stale)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            widget.app.lt('lbStale'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontFamily: Fonts.mono,
+                fontSize: 9,
+                letterSpacing: .5,
+                color: Pal.dim),
+          ),
+        ),
       for (var i = 0; i < rows.length; i++)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),

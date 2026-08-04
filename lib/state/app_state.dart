@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import '../core/ads.dart';
 import '../core/audio.dart';
 import '../core/haptics.dart';
+import '../core/leaderboard.dart';
+import '../core/lb_cache.dart';
 import '../core/net_board.dart';
 import '../core/notifications.dart';
 import '../core/storage.dart';
@@ -79,6 +81,14 @@ class AppState extends ChangeNotifier {
   int bestLevel = 0;
   int bestStreak = 0;
   int totalWins = 0;
+
+  /// Очки, ПОДТВЕРЖДЁННЫЕ таблицами лидеров. Если отправка сорвалась
+  /// без сети — здесь остаются старые числа, и syncBoards() дошлёт
+  /// разницу при первом же удобном случае. Очки не теряются никогда.
+  int sentPlatform = 0; // «распутано связей», принятое Game Center/PGS
+  int sentAll = 0; // totalWins, принятый сетевой доской
+  int sentWeekScore = 0; // недельный счёт, принятый сетевой доской
+  int sentWeekKey = -1; // неделя, к которой относится sentWeekScore
   bool musicOn = true;
   int theme = 0;
   List<int> owned = List.generate(kThemes.length, (i) => i == 0 ? 1 : 0);
@@ -238,6 +248,13 @@ class AppState extends ChangeNotifier {
       bestLevel = (sv['bl'] as num?)?.toInt() ?? 0;
       bestStreak = (sv['bs'] as num?)?.toInt() ?? 0;
       totalWins = (sv['tw'] as num?)?.toInt() ?? 0;
+      // Старый сейв без этих полей: прежний код отправлял очки при
+      // каждой победе, поэтому считаем их уже подтверждёнными — без
+      // внезапного входа в Game Center на первом же запуске обновления.
+      sentPlatform = (sv['nsp'] as num?)?.toInt() ?? bestLevel;
+      sentAll = (sv['nsa'] as num?)?.toInt() ?? totalWins;
+      sentWeekScore = (sv['nsw'] as num?)?.toInt() ?? wgp[0];
+      sentWeekKey = (sv['nswk'] as num?)?.toInt() ?? weekKey;
       musicOn = sv['mu'] != false;
       theme = ((sv['th'] as num?)?.toInt() ?? 0).clamp(0, kThemes.length - 1);
       if (sv['ow'] is List) {
@@ -298,6 +315,10 @@ class AppState extends ChangeNotifier {
       'bl': bestLevel,
       'bs': bestStreak,
       'tw': totalWins,
+      'nsp': sentPlatform,
+      'nsa': sentAll,
+      'nsw': sentWeekScore,
+      'nswk': sentWeekKey,
       'mu': musicOn,
       'th': theme,
       'ow': owned,
@@ -495,6 +516,50 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // ---------- досылка очков в таблицы ----------
+  /// Есть очки, которые таблицы ещё не подтвердили?
+  bool get _boardsBehind =>
+      bestLevel > sentPlatform ||
+      totalWins > sentAll ||
+      (wgp[0] > 0 && (sentWeekKey != weekKey || wgp[0] > sentWeekScore));
+
+  bool _syncingBoards = false;
+
+  /// Дослать очки в Game Center/Play Игры и на сетевую доску.
+  ///
+  /// Безопасно вызывать сколько угодно раз: когда всё подтверждено —
+  /// мгновенный выход без сети. Вызывается при победе, при возврате в
+  /// приложение и при открытии топа — очки, не ушедшие без интернета,
+  /// доедут при первом же его появлении. Ошибки игрока не трогают.
+  Future<void> syncBoards() async {
+    if (_syncingBoards || !_boardsBehind) return;
+    _syncingBoards = true;
+    try {
+      if (bestLevel > sentPlatform) {
+        if (await Lb.instance.submit(bestLevel)) {
+          sentPlatform = bestLevel;
+          save();
+        }
+      }
+      if (NetBoard.instance.available &&
+          (totalWins > sentAll ||
+              (wgp[0] > 0 &&
+                  (sentWeekKey != weekKey || wgp[0] > sentWeekScore)))) {
+        final all = totalWins, ws = wgp[0], wk = weekKey;
+        final ok = await NetBoard.instance
+            .submit(nick: nick, allTime: all, weeklyScore: ws, week: wk);
+        if (ok) {
+          sentAll = all;
+          sentWeekScore = ws;
+          sentWeekKey = wk;
+          save();
+        }
+      }
+    } finally {
+      _syncingBoards = false;
+    }
+  }
+
   // ---------- личные рекорды и уровень оператора ----------
   /// Вызывается движком при каждой победе: ведёт рекорды и уровень
   /// оператора. Повышение уровня — редкое событие, платит осколками.
@@ -505,14 +570,8 @@ class AppState extends ChangeNotifier {
     weekHit(0);
     if (lvl > bestLevel) bestLevel = lvl;
     if (streak > bestStreak) bestStreak = streak;
-    // Очки в сетевой топ — в фоне, ошибки сети игру не трогают.
-    NetBoard.instance
-        .submit(
-            nick: nick,
-            allTime: totalWins,
-            weeklyScore: wgp[0],
-            week: weekKey)
-        .ignore();
+    // Очки в таблицы — в фоне; без сети дошлются позже (syncBoards).
+    syncBoards().ignore();
     final after = operatorLevel;
     if (after > before) {
       shards += 2;
@@ -817,6 +876,11 @@ class AppState extends ChangeNotifier {
     bestLevel = 0;
     bestStreak = 0;
     totalWins = 0;
+    sentPlatform = 0;
+    sentAll = 0;
+    sentWeekScore = 0;
+    sentWeekKey = -1;
+    LbCache.clear();
     done = [];
     hintBought = 0;
     streak = 0;

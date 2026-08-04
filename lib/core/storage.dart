@@ -32,4 +32,23 @@ class Storage {
   void reset() {
     _prefs?.remove(_key);
   }
+
+  // ---- дополнительные ключи (кэши) — отдельно от сейва synapse_v1 ----
+  Map<String, dynamic>? loadAux(String key) {
+    final raw = _prefs?.getString(key);
+    if (raw == null) return null;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void saveAux(String key, Map<String, dynamic> data) {
+    _prefs?.setString(key, jsonEncode(data));
+  }
+
+  void removeAux(String key) {
+    _prefs?.remove(key);
+  }
 }

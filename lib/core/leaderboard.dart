@@ -32,16 +32,21 @@ class Lb {
 
   bool signedIn = false;
 
+  /// Таймауты: при перебоях сети вызовы платформы не должны висеть —
+  /// экран топа мгновенно падает на кэш, а очки досылаются позже.
+  static const _authTimeout = Duration(seconds: 8);
+  static const _callTimeout = Duration(seconds: 8);
+
   /// Вход в одно касание; на Android Play Games входит сам.
   Future<bool> ensureSignedIn() async {
     if (!available) return false;
     try {
-      if (await GameAuth.isSignedIn) {
+      if (await GameAuth.isSignedIn.timeout(_authTimeout)) {
         signedIn = true;
         return true;
       }
-      await GameAuth.signIn();
-      signedIn = await GameAuth.isSignedIn;
+      await GameAuth.signIn().timeout(_authTimeout);
+      signedIn = await GameAuth.isSignedIn.timeout(_authTimeout);
       return signedIn;
     } catch (_) {
       signedIn = false;
@@ -49,25 +54,29 @@ class Lb {
     }
   }
 
-  /// Отправить общий счёт «распутано связей». Падает молча: очки
-  /// досылаются при следующей победе, игрока это не касается.
-  Future<void> submit(int links) async {
-    if (!available || links <= 0) return;
+  /// Отправить общий счёт «распутано связей». true — платформа приняла;
+  /// false — очки досылаются позже (AppState.syncBoards), игрока это
+  /// не касается.
+  Future<bool> submit(int links) async {
+    if (!available || links <= 0) return false;
     try {
-      if (!signedIn && !await ensureSignedIn()) return;
+      if (!signedIn && !await ensureSignedIn()) return false;
       await Leaderboards.submitScore(
         score: Score(
           androidLeaderboardID: androidBoard,
           iOSLeaderboardID: iosAllTime,
           value: links,
         ),
-      );
+      ).timeout(_callTimeout);
       if (Platform.isIOS && iosWeekly.isNotEmpty) {
         await Leaderboards.submitScore(
           score: Score(iOSLeaderboardID: iosWeekly, value: links),
-        );
+        ).timeout(_callTimeout);
       }
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   String _iosBoard(bool weekly) => weekly ? iosWeekly : iosAllTime;
@@ -89,7 +98,7 @@ class Lb {
         timeScope: _scope(weekly),
         forceRefresh: true,
         maxResults: 100,
-      );
+      ).timeout(_callTimeout);
     } catch (_) {
       return null;
     }
@@ -104,7 +113,7 @@ class Lb {
         androidLeaderboardID: androidBoard,
         scope: PlayerScope.global,
         timeScope: _scope(weekly),
-      );
+      ).timeout(_callTimeout);
     } catch (_) {
       return null;
     }
