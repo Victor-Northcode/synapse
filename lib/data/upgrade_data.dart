@@ -24,15 +24,17 @@ class Upgrade {
 }
 
 /// Порядок = порядок на витрине.
+/// Цены выверены под дневной доход осколков (~4–6): первый уровень
+/// любого улучшения — цель на несколько дней, максимум — на недели.
 const kUpgrades = <Upgrade>[
   // +2 хода на каждой связи — самое понятное усиление.
-  Upgrade('moves', 'timer', 3, 40, 2.0),
+  Upgrade('moves', 'timer', 3, 35, 1.8),
   // +1 к дневному запасу подсказок.
-  Upgrade('hints', 'bulb', 2, 60, 2.0),
+  Upgrade('hints', 'bulb', 2, 50, 2.0),
   // +1 компьют за каждую победу.
-  Upgrade('income', 'bolt', 3, 70, 2.2),
-  // Первое пересечение подсвечивается бесплатно в начале уровня.
-  Upgrade('scan', 'target', 1, 140, 1.0),
+  Upgrade('income', 'bolt', 3, 60, 1.9),
+  // Лучший ход подсвечивается бесплатно в начале уровня.
+  Upgrade('scan', 'target', 1, 110, 1.0),
 ];
 
 /// Строки мастерской и прогресса оператора — дописаны поверх словаря.
@@ -48,7 +50,7 @@ const Map<String, Map<String, String>> kUpgradeStrings = {
     'up_income': 'Compute booster',
     'up_income_d': '+1 {bolt} per win',
     'up_scan': 'Diagnostics',
-    'up_scan_d': 'marks one crossing at level start',
+    'up_scan_d': 'shows the best move at level start',
     'upBought': '{n} installed',
     'opLvl': 'Operator {n}',
     'opNext': '{n} links to level {l}',
@@ -76,7 +78,7 @@ const Map<String, Map<String, String>> kUpgradeStrings = {
     'up_income': 'Ускоритель компьюта',
     'up_income_d': '+1 {bolt} за победу',
     'up_scan': 'Диагностика',
-    'up_scan_d': 'подсвечивает одно пересечение на старте',
+    'up_scan_d': 'показывает лучший ход на старте уровня',
     'upBought': '{n} установлен',
     'opLvl': 'Оператор {n}',
     'opNext': 'до уровня {l} — {n} связей',
@@ -104,7 +106,7 @@ const Map<String, Map<String, String>> kUpgradeStrings = {
     'up_income': 'Acelerador de cómputo',
     'up_income_d': '+1 {bolt} por victoria',
     'up_scan': 'Diagnóstico',
-    'up_scan_d': 'marca un cruce al empezar',
+    'up_scan_d': 'muestra la mejor jugada al empezar',
     'upBought': '{n} instalado',
     'opLvl': 'Operador {n}',
     'opNext': '{n} enlaces para el nivel {l}',
@@ -132,7 +134,7 @@ const Map<String, Map<String, String>> kUpgradeStrings = {
     'up_income': 'Accélérateur de calcul',
     'up_income_d': '+1 {bolt} par victoire',
     'up_scan': 'Diagnostic',
-    'up_scan_d': 'signale un croisement au départ',
+    'up_scan_d': 'montre le meilleur coup au départ',
     'upBought': '{n} installé',
     'opLvl': 'Opérateur {n}',
     'opNext': '{n} liens avant le niveau {l}',
@@ -160,7 +162,7 @@ const Map<String, Map<String, String>> kUpgradeStrings = {
     'up_income': 'Compute-Booster',
     'up_income_d': '+1 {bolt} pro Sieg',
     'up_scan': 'Diagnose',
-    'up_scan_d': 'markiert eine Kreuzung zum Start',
+    'up_scan_d': 'zeigt zum Start den besten Zug',
     'upBought': '{n} installiert',
     'opLvl': 'Operator {n}',
     'opNext': 'noch {n} Verbindungen bis Stufe {l}',
@@ -188,7 +190,7 @@ const Map<String, Map<String, String>> kUpgradeStrings = {
     'up_income': 'Acceleratore di calcolo',
     'up_income_d': '+1 {bolt} per vittoria',
     'up_scan': 'Diagnostica',
-    'up_scan_d': 'segna un incrocio all’inizio',
+    'up_scan_d': 'mostra la mossa migliore all’inizio',
     'upBought': '{n} installato',
     'opLvl': 'Operatore {n}',
     'opNext': '{n} collegamenti al livello {l}',
@@ -216,7 +218,7 @@ const Map<String, Map<String, String>> kUpgradeStrings = {
     'up_income': '計算ブースター',
     'up_income_d': '勝利ごとに {bolt} +1',
     'up_scan': '診断',
-    'up_scan_d': '開始時に交差を1つ表示',
+    'up_scan_d': '開始時に最善手を表示',
     'upBought': '{n} を設置',
     'opLvl': 'オペレーター {n}',
     'opNext': 'レベル {l} まで {n} 接続',
@@ -244,7 +246,7 @@ const Map<String, Map<String, String>> kUpgradeStrings = {
     'up_income': '연산 부스터',
     'up_income_d': '승리마다 {bolt} +1',
     'up_scan': '진단',
-    'up_scan_d': '시작 시 교차 한 개 표시',
+    'up_scan_d': '시작 시 최선의 수 표시',
     'upBought': '{n} 설치됨',
     'opLvl': '오퍼레이터 {n}',
     'opNext': '레벨 {l}까지 {n} 연결',
@@ -272,7 +274,7 @@ const Map<String, Map<String, String>> kUpgradeStrings = {
     'up_income': 'معزّز الحوسبة',
     'up_income_d': '‎+1 {bolt} لكل فوز',
     'up_scan': 'تشخيص',
-    'up_scan_d': 'يحدّد تقاطعًا واحدًا عند البدء',
+    'up_scan_d': 'يعرض أفضل حركة عند بدء المستوى',
     'upBought': 'تم تركيب {n}',
     'opLvl': 'مشغّل {n}',
     'opNext': '{n} وصلة حتى المستوى {l}',

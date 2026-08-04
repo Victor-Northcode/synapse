@@ -264,6 +264,7 @@ class _FieldPainter extends CustomPainter {
     _paintTwinLinks(canvas);
     _paintPick(canvas);
     _paintNodes(canvas);
+    _paintHintMove(canvas);
     _paintSnapRings(canvas);
     _paintParticles(canvas);
   }
@@ -680,6 +681,36 @@ class _FieldPainter extends CustomPainter {
       return (const Color(0xFFE8FFF2), const Color(0xFF00E676), const Color(0xFF046B34));
     }
     return (const Color(0xFFEAFDFF), const Color(0xFF4FE6FF), const Color(0xFF00697E));
+  }
+
+  /// Подсказка-ход: пунктир от узла к целевому гнезду и пульсирующие
+  /// кольца на обоих концах — видно, ЧТО двигать и КУДА.
+  void _paintHintMove(Canvas canvas) {
+    final i = play.hintNode, s = play.hintSocket;
+    if (i < 0 || s < 0 || i >= play.nodes.length || s >= play.sockets.length) {
+      return;
+    }
+    final a = Offset(play.nodes[i][0], play.nodes[i][1]);
+    final b = Offset(play.sockets[s][0], play.sockets[s][1]);
+    final k = .5 + .5 * math.sin(_pulse * 2 * math.pi);
+    final line = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 2.5 * g
+      ..color = Pal.yellow.withValues(alpha: .5 + .35 * k);
+    _drawDashedPath(
+        canvas,
+        Path()
+          ..moveTo(a.dx, a.dy)
+          ..lineTo(b.dx, b.dy),
+        line,
+        const [9, 8]);
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5 * g
+      ..color = Pal.yellow.withValues(alpha: .45 + .4 * k);
+    canvas.drawCircle(a, (23 + 3 * k) * g, ring);
+    canvas.drawCircle(b, (16 + 3 * k) * g, ring);
   }
 
   void _paintSnapRings(Canvas canvas) {

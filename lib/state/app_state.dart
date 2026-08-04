@@ -69,7 +69,8 @@ class AppState extends ChangeNotifier {
   int convUsed = 0;
   Map<String, int> inv = {'cut': 0, 'stab': 0, 'auto': 0};
   int adShards = 0;
-  int adItems = 0; // предметы за ролик, до 3 в день
+  int adItems = 0; // предметы за ролик в текущем часе (лимит 3)
+  int adItemHour = 0; // номер часа от эпохи — окно лимита предметов
 
   /// Мастерская: ключ апгрейда → купленный уровень.
   Map<String, int> upgrades = {};
@@ -227,6 +228,7 @@ class AppState extends ChangeNotifier {
       }
       adShards = (sv['ads'] as num?)?.toInt() ?? 0;
       adItems = (sv['adb'] as num?)?.toInt() ?? 0;
+      adItemHour = (sv['adbh'] as num?)?.toInt() ?? 0;
       if (sv['up'] is Map) {
         upgrades = {
           for (final e in (sv['up'] as Map).entries)
@@ -291,6 +293,7 @@ class AppState extends ChangeNotifier {
       'inv': inv,
       'ads': adShards,
       'adb': adItems,
+      'adbh': adItemHour,
       'up': upgrades,
       'bl': bestLevel,
       'bs': bestStreak,
@@ -417,7 +420,6 @@ class AppState extends ChangeNotifier {
     gp = [0, 0, 0];
     gDone = [false, false, false];
     adShards = 0;
-    adItems = 0;
     convUsed = 0;
     // «Запасная подсказка» из мастерской: +1 в день за каждый уровень.
     hintStock += dailyHintBonus;
@@ -668,10 +670,61 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Ролик — это ШАГ накопления, а не готовая вещь: целый предмет за
-  /// одну рекламу обесценивал и покупки, и само накопление.
-  /// Кнопка на карточке товара даёт тот же +1✦ из общего дневного пула.
   bool get canAdShard => adShards < 3 && Ads.instance.hasAds;
+
+  /// Товар за ролик: до [adItemLimit] предметов В ЧАС (осколки — 3 в
+  /// день, а предметы восполняются каждый час). Кнопка появляется на
+  /// карточке ВМЕСТО цены — только когда осколков не хватает; купить
+  /// и за осколки, и за рекламу одновременно нельзя.
+  static const adItemLimit = 3;
+
+  int get _thisHour =>
+      DateTime.now().toUtc().millisecondsSinceEpoch ~/ 3600000;
+
+  /// Новый час — новый запас предметов за ролик.
+  void _checkAdHour() {
+    final h = _thisHour;
+    if (adItemHour == h) return;
+    adItemHour = h;
+    adItems = 0;
+  }
+
+  bool get canAdItem {
+    _checkAdHour();
+    return adItems < adItemLimit && Ads.instance.hasAds;
+  }
+
+  /// Остаток предметов за ролик в этом часе — показывается на кнопке.
+  int get adItemsLeft {
+    _checkAdHour();
+    return adItemLimit - adItems;
+  }
+
+  Future<void> watchAdForItem(String key) async {
+    checkDay();
+    if (!canAdItem) return;
+    onEvent?.call(GameEvent(GameEventType.toast, text: t('adWatch')));
+    final ok = await Ads.instance.rewarded();
+    if (!ok) {
+      onEvent?.call(GameEvent(GameEventType.toast,
+          text: Ads.instance.hasAds ? t('adFail') : t('adOff')));
+      return;
+    }
+    adItems++;
+    if (key == 'hint') {
+      hintStock++;
+      onEvent?.call(GameEvent(GameEventType.toast, text: t('hintBought')));
+    } else {
+      inv[key] = (inv[key] ?? 0) + 1;
+      final bi = kBoosters.indexWhere((b) => b.key == key);
+      onEvent?.call(GameEvent(GameEventType.toast,
+          text: t('bBought').replaceAll('{n}', tl('bn')[bi])));
+    }
+    save();
+    GameAudio.instance.tone(880, .1, 'square', .05);
+    Haptics.instance.success();
+    notifyListeners();
+  }
 
   /// +1✦ за ролик, до трёх в день. Осколки — премиальная валюта,
   /// поэтому награда нарочно маленькая: быстро их не нафармить.
@@ -759,6 +812,7 @@ class AppState extends ChangeNotifier {
     inv = {'cut': 0, 'stab': 0, 'auto': 0};
     adShards = 0;
     adItems = 0;
+    adItemHour = 0;
     upgrades = {};
     bestLevel = 0;
     bestStreak = 0;

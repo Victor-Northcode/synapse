@@ -109,7 +109,8 @@ const Map<String, Map<String, Object>> kStrings = {
     'privacy': 'Privacy policy',
     'adpriv': 'Ad privacy settings',
     'hintBuy': 'Hint',
-    'hintBuyD': 'highlights one crossing wire',
+    'hintBuyD': 'shows the best move: which node and where',
+    'adBuy': 'get for an ad',
     'hintBought': '+1 hint',
   },
   'ru': {
@@ -217,7 +218,8 @@ const Map<String, Map<String, Object>> kStrings = {
     'privacy': 'Политика приватности',
     'adpriv': 'Настройки рекламы',
     'hintBuy': 'Подсказка',
-    'hintBuyD': 'подсвечивает один пересекающийся провод',
+    'hintBuyD': 'показывает лучший ход: какой узел и куда',
+    'adBuy': 'получить за рекламу',
     'hintBought': '+1 подсказка',
   },
   'es': {
@@ -325,7 +327,8 @@ const Map<String, Map<String, Object>> kStrings = {
     'privacy': 'Política de privacidad',
     'adpriv': 'Privacidad de anuncios',
     'hintBuy': 'Pista',
-    'hintBuyD': 'resalta un cable que se cruza',
+    'hintBuyD': 'muestra la mejor jugada: qué nodo y adónde',
+    'adBuy': 'conseguir por un anuncio',
     'hintBought': '+1 pista',
   },
   'fr': {
@@ -433,7 +436,8 @@ const Map<String, Map<String, Object>> kStrings = {
     'privacy': 'Politique de confidentialité',
     'adpriv': 'Confidentialité des pubs',
     'hintBuy': 'Indice',
-    'hintBuyD': 'met en évidence un câble qui se croise',
+    'hintBuyD': 'montre le meilleur coup : quel nœud et où',
+    'adBuy': 'obtenir contre une pub',
     'hintBought': '+1 indice',
   },
   'de': {
@@ -541,7 +545,8 @@ const Map<String, Map<String, Object>> kStrings = {
     'privacy': 'Datenschutzerklärung',
     'adpriv': 'Werbeeinstellungen',
     'hintBuy': 'Hinweis',
-    'hintBuyD': 'hebt ein kreuzendes Kabel hervor',
+    'hintBuyD': 'zeigt den besten Zug: welcher Knoten und wohin',
+    'adBuy': 'für Werbung erhalten',
     'hintBought': '+1 Hinweis',
   },
   'it': {
@@ -649,7 +654,8 @@ const Map<String, Map<String, Object>> kStrings = {
     'privacy': 'Informativa sulla privacy',
     'adpriv': 'Privacy della pubblicità',
     'hintBuy': 'Suggerimento',
-    'hintBuyD': 'evidenzia un cavo che si incrocia',
+    'hintBuyD': 'mostra la mossa migliore: quale nodo e dove',
+    'adBuy': 'ottieni con un annuncio',
     'hintBought': '+1 suggerimento',
   },
   'ja': {
@@ -757,7 +763,8 @@ const Map<String, Map<String, Object>> kStrings = {
     'privacy': 'プライバシーポリシー',
     'adpriv': '広告のプライバシー設定',
     'hintBuy': 'ヒント',
-    'hintBuyD': '交差しているケーブルを1本光らせる',
+    'hintBuyD': '最善手を表示：どのノードをどこへ',
+    'adBuy': '広告で入手',
     'hintBought': 'ヒント +1',
   },
   'ko': {
@@ -865,7 +872,8 @@ const Map<String, Map<String, Object>> kStrings = {
     'privacy': '개인정보 처리방침',
     'adpriv': '광고 개인정보 설정',
     'hintBuy': '힌트',
-    'hintBuyD': '교차하는 케이블 하나를 표시',
+    'hintBuyD': '최선의 수 표시: 어떤 노드를 어디로',
+    'adBuy': '광고로 받기',
     'hintBought': '힌트 +1',
   },
   'ar': {
@@ -973,7 +981,8 @@ const Map<String, Map<String, Object>> kStrings = {
     'privacy': 'سياسة الخصوصية',
     'adpriv': 'إعدادات خصوصية الإعلانات',
     'hintBuy': 'تلميح',
-    'hintBuyD': 'يبرز كابلاً متقاطعاً واحداً',
+    'hintBuyD': 'يعرض أفضل حركة: أي عقدة وإلى أين',
+    'adBuy': 'احصل عليه مقابل إعلان',
     'hintBought': '‎+1 تلميح',
   },
 };

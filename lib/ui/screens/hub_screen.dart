@@ -166,7 +166,7 @@ class HubScreen extends StatelessWidget {
         pair(_shopBooster(app, 0), _shopBooster(app, 1)),
         const SizedBox(height: 8),
         pair(_shopBooster(app, 2), _shopHint(app)),
-        if (app.adShards < 3) ...[
+        if (app.canAdShard) ...[
           const SizedBox(height: 12),
           Pressable(
             onTap: app.watchAdForShards,
@@ -261,8 +261,9 @@ class HubScreen extends StatelessWidget {
 
   /// Карточка товара: иконка и запас сверху, полное название и полное
   /// описание (ничего не обрезается), внизу — цена во всю ширину.
-  /// Если осколков не хватает и доступен ролик — ВМЕСТО цены кнопка
-  /// «за рекламу».
+  /// Обычно внизу цена в осколках; когда осколков не хватает и остался
+  /// дневной лимит роликов — ВМЕСТО цены кнопка «за рекламу» (обе
+  /// одновременно не показываются никогда).
   Widget _shopCard({
     required bool can,
     required VoidCallback onTap,
@@ -271,6 +272,7 @@ class HubScreen extends StatelessWidget {
     required String name,
     required String desc,
     required String price,
+    String adLabel = '',
     VoidCallback? onAdTap,
   }) {
     return Pressable(
@@ -325,57 +327,60 @@ class HubScreen extends StatelessWidget {
                   fontFamily: Fonts.mono, fontSize: 9.5, height: 1.45, color: Pal.bodyDim)),
           const SizedBox(height: 10),
           const Spacer(),
-          // Цель всегда на виду: цена показана даже когда не хватает —
-          // так есть ради чего копить.
-          Opacity(
-            opacity: can ? 1 : .5,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: can ? const Color(0x1500E5FF) : Colors.transparent,
-                border: Border.all(
-                    color: can ? const Color(0x7300E5FF) : Pal.line),
-                borderRadius: BorderRadius.circular(999),
+          if (onAdTap == null)
+            // Цель всегда на виду: цена показана даже когда не хватает —
+            // так есть ради чего копить.
+            Opacity(
+              opacity: can ? 1 : .5,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: can ? const Color(0x1500E5FF) : Colors.transparent,
+                  border: Border.all(
+                      color: can ? const Color(0x7300E5FF) : Pal.line),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: IconText(price,
+                    style: const TextStyle(
+                        fontFamily: Fonts.disp,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: Pal.cyan)),
               ),
-              child: IconText(price,
-                  style: const TextStyle(
-                      fontFamily: Fonts.disp,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                      color: Pal.cyan)),
-            ),
-          ),
-          // Не хватает — ролик приближает покупку на +1✦ (не даёт вещь).
-          if (onAdTap != null) ...[
-            const SizedBox(height: 6),
+            )
+          else
+            // Осколков не хватает, лимит роликов не исчерпан — товар
+            // выдаётся за рекламу. Кнопка стоит ВМЕСТО цены.
             Pressable(
               onTap: onAdTap,
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 7),
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: const Color(0x1CFFD400),
                   border: Border.all(color: const Color(0x66FFD400)),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                  GameIcon('tv', size: 12, color: Pal.yellow),
-                  SizedBox(width: 5),
-                  Text('+1',
-                      style: TextStyle(
-                          fontFamily: Fonts.disp,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 10,
-                          color: Pal.yellow)),
-                  SizedBox(width: 2),
-                  ShardIcon(size: 8, color: Pal.yellow),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const GameIcon('tv', size: 12, color: Pal.yellow),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(adLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontFamily: Fonts.disp,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 10,
+                            letterSpacing: .6,
+                            color: Pal.yellow)),
+                  ),
                 ]),
               ),
             ),
-          ],
         ]),
       ),
     );
@@ -392,7 +397,9 @@ class HubScreen extends StatelessWidget {
       name: app.tl('bn')[bi],
       desc: app.tl('bd')[bi],
       price: '${b.cost}✦',
-      onAdTap: !can && app.canAdShard ? app.watchAdForShards : null,
+      // Остаток часового лимита виден прямо на кнопке: «за рекламу · 2».
+      adLabel: '${app.t('adBuy')} · ${app.adItemsLeft}',
+      onAdTap: !can && app.canAdItem ? () => app.watchAdForItem(b.key) : null,
     );
   }
 
@@ -406,7 +413,8 @@ class HubScreen extends StatelessWidget {
       name: app.t('hintBuy'),
       desc: app.t('hintBuyD'),
       price: '${app.hintPrice()}✦',
-      onAdTap: !can && app.canAdShard ? app.watchAdForShards : null,
+      adLabel: '${app.t('adBuy')} · ${app.adItemsLeft}',
+      onAdTap: !can && app.canAdItem ? () => app.watchAdForItem('hint') : null,
     );
   }
 

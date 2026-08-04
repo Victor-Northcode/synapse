@@ -12,7 +12,8 @@ void main() {
     ];
     for (final (fw, fh, sc) in fields) {
       for (var lvl = 1; lvl <= 60; lvl++) {
-        final l = generateLevel(lvl, fw, fh, chapter: 2, curDay: 1, scale: sc);
+        final l = generateLevel(lvl, fw, fh,
+            chapter: 2, curDay: 1, scale: sc, seed: lvl * 1000003);
         final sol = [for (var i = 0; i < l.nodes.length; i++) l.sockets[i]];
         expect(countCross(sol, l.edges), 0,
             reason: 'уровень $lvl на поле ${fw}x$fh (масштаб $sc) нерешаем');
@@ -26,7 +27,8 @@ void main() {
   test('каждый сгенерированный уровень имеет решение без пересечений', () {
     for (var lvl = 1; lvl <= 60; lvl++) {
       for (var rep = 0; rep < 3; rep++) {
-        final l = generateLevel(lvl, 360, 460, chapter: rep, curDay: rep);
+        final l = generateLevel(lvl, 360, 460,
+            chapter: rep, curDay: rep, seed: lvl * 7919 + rep);
         // Раскладка-решение: узел i в гнезде i (первые n гнёзд — из sol).
         final sol = [
           for (var i = 0; i < l.nodes.length; i++) l.sockets[i],
@@ -36,6 +38,48 @@ void main() {
         expect(l.movesMax, greaterThanOrEqualTo(4));
         expect(l.slotOf.toSet().length, l.slotOf.length,
             reason: 'два узла в одном гнезде');
+      }
+    }
+  });
+
+  test('один сид — одна и та же головоломка (выход/вход не меняет уровень)', () {
+    for (final lvl in [1, 7, 20, 33, 50]) {
+      final a = generateLevel(lvl, 360, 460,
+          chapter: 2, curDay: 1, seed: lvl * 1000003);
+      final b = generateLevel(lvl, 360, 460,
+          chapter: 2, curDay: 1, seed: lvl * 1000003);
+      expect(b.nodes, a.nodes, reason: 'узлы уровня $lvl различаются');
+      expect(b.edges, a.edges, reason: 'рёбра уровня $lvl различаются');
+      expect(b.slotOf, a.slotOf, reason: 'гнёзда уровня $lvl различаются');
+      expect(b.ntype, a.ntype, reason: 'препятствия уровня $lvl различаются');
+      expect(b.movesMax, a.movesMax, reason: 'бюджет уровня $lvl различается');
+    }
+  });
+
+  test('бюджет ходов покрывает гарантированное решение с запасом', () {
+    for (var lvl = 1; lvl <= 60; lvl++) {
+      final l = generateLevel(lvl, 360, 460,
+          chapter: 2, curDay: 1, seed: lvl * 1000003);
+      var misplaced = 0;
+      for (var i = 0; i < l.nodes.length; i++) {
+        if (l.slotOf[i] != i) misplaced++;
+      }
+      expect(l.movesMax, greaterThanOrEqualTo(misplaced + 2),
+          reason: 'уровень $lvl: бюджет ${l.movesMax} меньше решения');
+    }
+  });
+
+  test('гвоздь всегда прибит к узлу в своём гнезде', () {
+    for (var lvl = 1; lvl <= 60; lvl++) {
+      for (var rep = 0; rep < 4; rep++) {
+        final l = generateLevel(lvl, 360, 460,
+            chapter: 2, curDay: 1, seed: lvl * 555 + rep);
+        for (var i = 0; i < l.ntype.length; i++) {
+          if (l.ntype[i] == 3) {
+            expect(l.slotOf[i], i,
+                reason: 'уровень $lvl: гвоздь вне гнезда делает уровень нерешаемым');
+          }
+        }
       }
     }
   });

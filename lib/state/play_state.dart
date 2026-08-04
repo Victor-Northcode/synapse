@@ -76,6 +76,11 @@ class PlayState extends ChangeNotifier {
   int dragIdx = -1;
   List<double> _dragOff = [0, 0];
   int hiLite = -1;
+
+  /// Подсказка-ход: какой узел и в какое гнездо переставить.
+  int hintNode = -1;
+  int hintSocket = -1;
+  int _hintSeq = 0;
   int snapSeq = 0;
   bool noHintRun = true;
   int level = 1;
@@ -107,12 +112,20 @@ class PlayState extends ChangeNotifier {
     level = lvl;
     kind = lvlKind(lvl);
     scale = scaleFor(w, h);
+    // Сид от номера уровня: уровень N — всегда одна и та же головоломка.
+    // Выйти и зайти снова (или проиграть и повторить) — расклад тот же.
+    var attempt = 0;
     var l = generateLevel(lvl, w, h,
-        chapter: app.chapter, curDay: app.curDay, scale: scale);
-    var guard = 0;
-    while (countCross(l.nodes, l.edges) == 0 && guard++ < 8) {
+        chapter: app.chapter,
+        curDay: app.curDay,
+        scale: scale,
+        seed: lvl * 1000003 + attempt);
+    while (countCross(l.nodes, l.edges) == 0 && ++attempt < 8) {
       l = generateLevel(lvl, w, h,
-          chapter: app.chapter, curDay: app.curDay, scale: scale);
+          chapter: app.chapter,
+          curDay: app.curDay,
+          scale: scale,
+          seed: lvl * 1000003 + attempt);
     }
     nodes = l.nodes;
     edges = l.edges;
@@ -129,21 +142,19 @@ class PlayState extends ChangeNotifier {
     maxBridges = l.maxBridges;
     bridges.clear();
     hiLite = -1;
+    hintNode = -1;
+    hintSocket = -1;
+    _hintSeq++;
     snapSeq = 0;
     noHintRun = true;
     result = null;
 
-    // Кривая сложности, как в нормальных играх: первые связи прощают
-    // почти всё (бюджет с запасом, игрок учится), дальше он плавно
-    // ужимается — к 50-й связи минус четверть, и выигрывает уже навык,
-    // а не запас ходов. «Сложные»/«очень сложные» жмут сверху.
-    final ramp = 1.08 - 0.28 * math.min(1.0, (level - 1) / 50.0);
-    final kindK = kind == 2 ? 0.88 : (kind == 1 ? 0.94 : 1.0);
-    movesMax =
-        (l.movesMax * ramp * kindK * (1 + (app.timeBonus() - 1) * 0.5)).round();
-    movesMax += app.bonusMoves; // «Резервный контур» из мастерской
+    // Бюджет ходов посчитан генератором от фактической стоимости решения
+    // расклада (см. level.dart) — здесь добавляются только бонусы игрока:
+    // построенные задачи датацентра и «Резервный контур» из мастерской.
+    movesMax = (l.movesMax * (1 + (app.timeBonus() - 1) * 0.5)).round();
+    movesMax += app.bonusMoves;
     movesMax = math.max(4, movesMax);
-    if (liveEdge >= 0) movesMax = math.max(4, movesMax - 2);
     moves = movesMax;
 
     _recount();
@@ -174,25 +185,10 @@ class PlayState extends ChangeNotifier {
       GameAudio.instance.tone(900, .16, 'sine', .05);
       Haptics.instance.buzz(33);
     }
-    // «Диагностика» из мастерской: первое пересечение подсвечивается
-    // бесплатно на старте уровня.
+    // «Диагностика» из мастерской: лучший ход подсвечивается бесплатно
+    // на старте уровня.
     if (app.hasScan && crossings > 0) {
-      for (var a = 0; a < edges.length && hiLite < 0; a++) {
-        for (var b = a + 1; b < edges.length; b++) {
-          if (shares(edges[a], edges[b])) continue;
-          if (segX(nodes[edges[a][0]], nodes[edges[a][1]], nodes[edges[b][0]],
-              nodes[edges[b][1]])) {
-            hiLite = a;
-            break;
-          }
-        }
-      }
-      if (hiLite >= 0) {
-        Future.delayed(const Duration(milliseconds: 2600), () {
-          hiLite = -1;
-          notifyListeners();
-        });
-      }
+      if (!_showBestMove()) _highlightCrossingEdge();
     }
     notifyListeners();
   }
@@ -417,6 +413,12 @@ class PlayState extends ChangeNotifier {
     final changed = bi != from;
     slotOf[i] = bi;
     dragIdx = -1;
+    // Подсказанный узел переставлен — гасим подсказку сразу.
+    if (changed && i == hintNode) {
+      hintNode = -1;
+      hintSocket = -1;
+      _hintSeq++;
+    }
     _recount();
     if (changed) {
       moves -= wet ? 2 : 1;
@@ -636,10 +638,43 @@ class PlayState extends ChangeNotifier {
   }
 
   // ---------- подсказка ----------
-  /// true — подсказка показана; false — нет запаса (нужен ролик).
-  bool useHint() {
-    if (!alive) return true;
-    if (app.hintStock <= 0) return false;
+  /// Ищет ход, сильнее всего снижающий число пересечений, и подсвечивает
+  /// узел и целевое гнездо. false — одним ходом улучшить нечего.
+  bool _showBestMove() {
+    var bestI = -1, bestS = -1;
+    var bestC = countCross(nodes, edges, bridges);
+    for (var i = 0; i < nodes.length; i++) {
+      if (ntype[i] == 3) continue;
+      final old = [...nodes[i]];
+      for (var s = 0; s < sockets.length; s++) {
+        if (slotOf.contains(s)) continue;
+        nodes[i] = [...sockets[s]];
+        final c = countCross(nodes, edges, bridges);
+        if (c < bestC) {
+          bestC = c;
+          bestI = i;
+          bestS = s;
+        }
+      }
+      nodes[i] = old;
+    }
+    if (bestI < 0) return false;
+    hintNode = bestI;
+    hintSocket = bestS;
+    final seq = ++_hintSeq;
+    notifyListeners();
+    Future.delayed(const Duration(milliseconds: 3200), () {
+      if (seq != _hintSeq) return;
+      hintNode = -1;
+      hintSocket = -1;
+      notifyListeners();
+    });
+    return true;
+  }
+
+  /// Запасной вариант, когда одним ходом лучше не сделать: подсветить
+  /// пересекающийся кабель — хотя бы направить взгляд.
+  void _highlightCrossingEdge() {
     for (var a = 0; a < edges.length && hiLite < 0; a++) {
       for (var b = a + 1; b < edges.length; b++) {
         if (shares(edges[a], edges[b])) continue;
@@ -650,15 +685,26 @@ class PlayState extends ChangeNotifier {
         }
       }
     }
+    if (hiLite < 0) return;
+    final seq = ++_hintSeq;
+    Future.delayed(const Duration(milliseconds: 2600), () {
+      if (seq != _hintSeq) return;
+      hiLite = -1;
+      notifyListeners();
+    });
+  }
+
+  /// true — подсказка показана; false — нет запаса (нужен ролик).
+  /// Подсказка показывает лучший ход: какой узел и куда переставить.
+  bool useHint() {
+    if (!alive) return true;
+    if (app.hintStock <= 0) return false;
+    if (!_showBestMove()) _highlightCrossingEdge();
     app.hintStock--;
     noHintRun = false;
     app.save();
     GameAudio.instance.tone(1000, .1, 'sine', .05);
     notifyListeners();
-    Future.delayed(const Duration(milliseconds: 2200), () {
-      hiLite = -1;
-      notifyListeners();
-    });
     return true;
   }
 

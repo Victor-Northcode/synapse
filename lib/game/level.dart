@@ -20,16 +20,23 @@ class LevelSpec {
   const LevelSpec(this.n, this.dens);
 }
 
+/// Уровни первого появления механик: уровень → тип препятствия.
+/// На этих уровнях сложность придерживается: игрок учит новое правило,
+/// а не воюет с клубком.
+const kForcedIntro = {4: 1, 9: 2, 15: 3, 20: 6, 26: 7, 32: 8, 38: 4, 44: 9, 50: 5};
+
 LevelSpec spec(int level) {
-  var base = math.min(16, 4 + (level * 0.55).floor());
+  var base = math.min(16, 4 + (level * 0.45).floor());
   // На передышке уменьшаем и число узлов, а не только запутанность.
   if (lvlKind(level) == -1) base = math.max(4, base - 3);
-  return LevelSpec(base, math.min(2.0, 1.12 + level * 0.032));
+  return LevelSpec(base, math.min(1.7, 1.10 + level * 0.022));
 }
 
 /// -1 передышка · 0 обычный · 1 сложный · 2 очень сложный (≈ раз в 10).
 int lvlKind(int level) {
   if (level <= 4) return 0;
+  // Вводный уровень механики всегда «обычный» — без надбавок сверху.
+  if (kForcedIntro.containsKey(level)) return 0;
   final band = level ~/ 10;
   final superAt = band * 10 + 5 + (hash32(band * 7717 + 13) * 4).floor();
   if (level == superAt) return 2;
@@ -39,15 +46,18 @@ int lvlKind(int level) {
   return 0;
 }
 
-const _kMul = {-1: 0.78, 0: 1.0, 1: 1.28, 2: 1.55};
+const _kMul = {-1: 0.78, 0: 1.0, 1: 1.22, 2: 1.45};
 
 int targetCross(int level, int edgeCount) {
   var base = math.max(
-    2 + (level * 0.7).floor(),
-    (edgeCount * (0.5 + math.min(0.55, level * 0.02))).round(),
+    1 + (level * 0.45).floor(),
+    (edgeCount * (0.40 + math.min(0.40, level * 0.012))).round(),
   );
-  base = math.min(base, (edgeCount * 1.15).round());
-  return math.max(1, (base * _kMul[lvlKind(level)]!).round());
+  base = math.min(base, (edgeCount * 0.9).round());
+  var t = (base * _kMul[lvlKind(level)]!).round();
+  // Знакомство с новой механикой — клубок заметно проще обычного.
+  if (kForcedIntro.containsKey(level)) t = (t * 0.85).round();
+  return math.max(1, t);
 }
 
 /// Зона протечки.
@@ -98,9 +108,16 @@ class Level {
 ///
 /// [w]/[h] — размер поля, [chapter] и [curDay] задают темп появления
 /// протечек, бомб и мостов, как в исходнике.
+///
+/// [seed] делает генерацию детерминированной: один и тот же номер
+/// уровня — одна и та же головоломка. Зайти, выйти и зайти снова —
+/// расклад не меняется.
 Level generateLevel(int level, double w, double h,
-    {required int chapter, required int curDay, double scale = 1.0}) {
-  final rnd = math.Random();
+    {required int chapter,
+    required int curDay,
+    required int seed,
+    double scale = 1.0}) {
+  final rnd = math.Random(seed);
   double r() => rnd.nextDouble();
 
   final sp = spec(level);
@@ -313,16 +330,13 @@ Level generateLevel(int level, double w, double h,
     nodes[x2] = tn;
   }
 
-  final movesMax =
-      math.max(4, (nodes.length * 1.1 + countCross(nodes, edges) * 0.78).round());
-
   // Препятствия появляются постепенно и не на каждом уровне.
   final ntype = List.filled(nodes.length, 0);
   var liveEdge = -1, ghostE = -1;
   final twin = <int, int>{};
   final kd = lvlKind(level);
   var pool = <int>[];
-  final forced = const {4: 1, 9: 2, 15: 3, 20: 6, 26: 7, 32: 8, 38: 4, 44: 9, 50: 5}[level];
+  final forced = kForcedIntro[level];
   if (forced != null) {
     pool = [forced];
   } else {
@@ -371,9 +385,30 @@ Level generateLevel(int level, double w, double h,
       }
       continue;
     }
-    final cnt = (t == 3)
-        ? 1
-        : (forced != null ? 1 : 1 + rnd.nextInt(math.min(2, 1 + level ~/ 14)));
+    if (t == 3) {
+      // Гвоздь прибивает только узел, который УЖЕ в своём гнезде —
+      // прибитый вне гнезда узел мог делать уровень нерешаемым.
+      final homes = <int>[
+        for (var q = 0; q < nodes.length; q++)
+          if (slotOf[q] == q && ntype[q] == 0) q
+      ];
+      var nl = -1;
+      if (homes.isNotEmpty) {
+        nl = homes[rnd.nextInt(homes.length)];
+      } else {
+        for (var q = 0; q < nodes.length; q++) {
+          if (ntype[q] == 0 && !slotOf.contains(q)) {
+            slotOf[q] = q;
+            nodes[q] = [sockets[q][0], sockets[q][1]];
+            nl = q;
+            break;
+          }
+        }
+      }
+      if (nl >= 0) ntype[nl] = 3;
+      continue;
+    }
+    final cnt = forced != null ? 1 : 1 + rnd.nextInt(math.min(2, 1 + level ~/ 14));
     for (var i = 0; i < cnt; i++) {
       var idx = rnd.nextInt(nodes.length);
       var g = 0;
@@ -383,6 +418,54 @@ Level generateLevel(int level, double w, double h,
       if (ntype[idx] == 0) ntype[idx] = t;
     }
   }
+
+  // ---- бюджет ходов: от фактической стоимости решения расклада ----
+  // Гарантированное решение стоит: по ходу за каждый узел не в своём
+  // гнезде, плюс ход «парковки» за каждый замкнутый цикл занятых гнёзд,
+  // плюс тариф препятствий. Сверху — запас: новичкам ×1.9, к 45-й связи
+  // он плавно ужимается до ×1.25, и выигрывает навык, а не запас ходов.
+  final occ = List.filled(sockets.length, -1);
+  for (var i = 0; i < nodes.length; i++) {
+    occ[slotOf[i]] = i;
+  }
+  var solveCost = 0;
+  for (var i = 0; i < nodes.length; i++) {
+    if (slotOf[i] != i) solveCost++;
+  }
+  final vis = List.filled(nodes.length, false);
+  for (var i = 0; i < nodes.length; i++) {
+    if (vis[i] || slotOf[i] == i) continue;
+    var j = i;
+    while (true) {
+      vis[j] = true;
+      final b = occ[j]; // кто занял домашнее гнездо узла j
+      if (b < 0 || b == j) break; // дом свободен — цепочка без парковки
+      if (b == i) {
+        solveCost++; // цикл: одному узлу нужна парковка в свободном гнезде
+        break;
+      }
+      if (vis[b]) break;
+      j = b;
+    }
+  }
+  // Тариф препятствий: снять липкость, дрейф или ржавчину — тоже ходы.
+  for (final t in ntype) {
+    if (t == 1 || t == 6) solveCost += 1;
+    if (t == 4) solveCost += 2;
+    if (t == 2) solveCost += 2; // чистка + запас на распространение
+  }
+  solveCost += twin.length; // спаянная пара двигается только вместе
+  // Посадка в гнездо под протечкой стоит двойной ход.
+  for (var i = 0; i < nodes.length; i++) {
+    if (slotOf[i] != i && zones.any((z) => z.contains(sockets[i]))) solveCost++;
+  }
+  solveCost = math.max(2, solveCost);
+
+  final ease = 1.9 - 0.65 * math.min(1.0, (level - 1) / 45.0);
+  final kindK = const {-1: 1.15, 0: 1.0, 1: 0.92, 2: 0.85}[kd]!;
+  var movesMax = math.max(solveCost + 2, (solveCost * ease * kindK).round());
+  // Кабель под напряжением поджимает бюджет, но не ниже решаемого.
+  if (liveEdge >= 0) movesMax = math.max(solveCost + 1, movesMax - 2);
 
   return Level(
     nodes: nodes,
