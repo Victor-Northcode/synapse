@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Project ID Play Games Services (цифры из Play Console).
-         Заглушка до настройки консоли — см. lib/core/leaderboard.dart. -->
-    <string name="game_services_project_id" translatable="false">000000000000</string>
+    <!-- Project ID Play Games Services (из Play Console → PGS →
+         Configuration). Таблица лидеров — lib/core/leaderboard.dart. -->
+    <string name="game_services_project_id" translatable="false">614253301262</string>
 </resources>

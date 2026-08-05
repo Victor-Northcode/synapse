@@ -15,11 +15,11 @@ class Lb {
   // ---- идентификаторы таблиц ----
   // iOS: создаются в App Store Connect → Game Center → Leaderboards.
   //   iosAllTime — классическая, iosWeekly — recurring с недельным сбросом.
-  // Android: создаётся в Play Console → Play Games Services → Лидерборды,
-  //   id выглядит как «CgkI…». Пока пусто — на Android раздел скрыт.
+  // Android: Play Console → Play Games Services → Лидерборды; Project ID
+  //   лежит в android/.../res/values/strings.xml (game_services_project_id).
   static const iosAllTime = 'synapse.links';
   static const iosWeekly = 'synapse.links.week';
-  static const androidBoard = '';
+  static const androidBoard = 'CgkIjpzmovAREAIQAA';
 
   bool get _platformOk => !kIsWeb && (Platform.isIOS || Platform.isAndroid);
 
