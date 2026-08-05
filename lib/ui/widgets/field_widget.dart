@@ -303,16 +303,35 @@ class _FieldPainter extends CustomPainter {
     for (var k = 0; k < play.sockets.length; k++) {
       final q = play.sockets[k];
       final c = Offset(q[0], q[1]);
+      // Гнездо под протечкой: посадка сюда стоит ДВА хода — игрок
+      // должен видеть это заранее, а не узнавать по факту из тоста.
+      final wet = play.zones.isNotEmpty && play.zones.any((z) => z.contains(q));
       canvas.drawCircle(c, 20 * g, Paint()..color = const Color(0xFF0C1420));
+      if (wet) {
+        final wk = .5 + .5 * math.sin(_pulse * 2 * math.pi);
+        canvas.drawCircle(
+            c, 20 * g, Paint()..color = const Color(0x2E2979FF));
+        canvas.drawCircle(
+            c,
+            (23 + 2 * wk) * g,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2 * g
+              ..color = Color.lerp(const Color(0x662979FF),
+                  const Color(0xB32979FF), wk)!);
+      }
       canvas.drawCircle(
           c,
           20,
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = (dragging ? 2.4 : 1.2) * g
-            ..color = dragging ? const Color(0xF200E5FF) : const Color(0x2996BEEB));
+            ..color = dragging
+                ? (wet ? const Color(0xF22979FF) : const Color(0xF200E5FF))
+                : const Color(0x2996BEEB));
       if (dragging) {
-        canvas.drawCircle(c, 20 * g, Paint()..color = const Color(0x2900E5FF));
+        canvas.drawCircle(c, 20 * g,
+            Paint()..color = wet ? const Color(0x332979FF) : const Color(0x2900E5FF));
       }
       canvas.drawCircle(c, 16 * g, Paint()..color = const Color(0xFF04080E));
       // Верхняя тёмная и нижняя светлая дуги — объём каверны.

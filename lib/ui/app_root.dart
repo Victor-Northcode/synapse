@@ -13,6 +13,7 @@ import '../state/play_state.dart';
 import 'overlays/age_gate.dart';
 import 'overlays/mech_overlay.dart';
 import 'overlays/privacy_overlay.dart';
+import 'overlays/rules_overlay.dart';
 import 'overlays/result_overlay.dart';
 import 'overlays/story_overlay.dart';
 import 'screens/boot_screen.dart';
@@ -42,6 +43,7 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
   StoryMode? storyMode;
   int storyDay = 0;
   bool showPrivacy = false;
+  bool showRules = false;
 
   // Тост.
   String? toastText;
@@ -237,6 +239,10 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
       setState(() => showPrivacy = false);
       return true;
     }
+    if (showRules) {
+      setState(() => showRules = false);
+      return true;
+    }
     if (storyMode == StoryMode.dayScene || storyMode == StoryMode.chapterFinale) {
       _closeStory();
       return true;
@@ -317,6 +323,7 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
                             onShowIntro: () => setState(() {
                               storyMode = StoryMode.intro;
                             }),
+                            onShowRules: () => setState(() => showRules = true),
                             onShowPrivacy: () =>
                                 setState(() => showPrivacy = true),
                           ),
@@ -406,6 +413,15 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
                 child: PopIn(
                   child: PrivacyOverlay(
                       app: app, onClose: () => setState(() => showPrivacy = false)),
+                ),
+              ),
+
+            // Правила игры.
+            if (showRules)
+              Positioned.fill(
+                child: PopIn(
+                  child: RulesOverlay(
+                      app: app, onClose: () => setState(() => showRules = false)),
                 ),
               ),
 

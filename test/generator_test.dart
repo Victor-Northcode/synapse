@@ -88,7 +88,7 @@ void main() {
     expect(lvlKind(1), 0);
     // Значения фиксированы формулой hash32 — сверены с JS-оригиналом.
     expect(spec(1).n, 4);
-    expect(spec(30).n, 16);
+    expect(spec(30).n, 14);
     expect(targetCross(1, 6), greaterThanOrEqualTo(1));
     // hash32 должен совпадать с JS: rnd32(11) и т.п. стабильны.
     expect(hash32(11), closeTo(hash32(11), 0));

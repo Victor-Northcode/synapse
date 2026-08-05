@@ -26,34 +26,37 @@ class LevelSpec {
 const kForcedIntro = {4: 1, 9: 2, 15: 3, 20: 6, 26: 7, 32: 8, 38: 4, 44: 9, 50: 5};
 
 LevelSpec spec(int level) {
-  var base = math.min(16, 4 + (level * 0.45).floor());
+  // Рост числа узлов медленный: к 20-й связи ~11 узлов, потолок 16 —
+  // только к 35-й. Сложность приходит «к большому уровню», а не к 20-му.
+  var base = math.min(16, 4 + (level * 0.35).floor());
   // На передышке уменьшаем и число узлов, а не только запутанность.
   if (lvlKind(level) == -1) base = math.max(4, base - 3);
-  return LevelSpec(base, math.min(1.7, 1.10 + level * 0.022));
+  return LevelSpec(base, math.min(1.6, 1.08 + level * 0.016));
 }
 
 /// -1 передышка · 0 обычный · 1 сложный · 2 очень сложный (≈ раз в 10).
 int lvlKind(int level) {
-  if (level <= 4) return 0;
+  if (level <= 6) return 0;
   // Вводный уровень механики всегда «обычный» — без надбавок сверху.
   if (kForcedIntro.containsKey(level)) return 0;
   final band = level ~/ 10;
   final superAt = band * 10 + 5 + (hash32(band * 7717 + 13) * 4).floor();
-  if (level == superAt) return 2;
+  // «Очень сложные» не раньше 12-й связи — новичка ими не встречают.
+  if (level == superAt && level >= 12) return 2;
   final h = hash32(level * 13 + 7);
-  if (h < 0.24) return 1;
+  if (h < 0.20) return 1;
   if (h > 0.88) return -1;
   return 0;
 }
 
-const _kMul = {-1: 0.78, 0: 1.0, 1: 1.22, 2: 1.45};
+const _kMul = {-1: 0.8, 0: 1.0, 1: 1.15, 2: 1.3};
 
 int targetCross(int level, int edgeCount) {
   var base = math.max(
-    1 + (level * 0.45).floor(),
-    (edgeCount * (0.40 + math.min(0.40, level * 0.012))).round(),
+    1 + (level * 0.35).floor(),
+    (edgeCount * (0.35 + math.min(0.35, level * 0.009))).round(),
   );
-  base = math.min(base, (edgeCount * 0.9).round());
+  base = math.min(base, (edgeCount * 0.85).round());
   var t = (base * _kMul[lvlKind(level)]!).round();
   // Знакомство с новой механикой — клубок заметно проще обычного.
   if (kForcedIntro.containsKey(level)) t = (t * 0.85).round();
@@ -302,7 +305,7 @@ Level generateLevel(int level, double w, double h,
     }
     if (bestF >= 0 && bestDist > nodeR * 3.2) pickIdx = bestF;
   }
-  if (ch >= 2 && level > 3) {
+  if (ch >= 2 && level > 5) {
     for (var z = 0; z < 1 + (ch >= 3 ? 1 : 0); z++) {
       zones.add(Zone(
         pad + r() * (w - 2 * pad - 90 * scale),
@@ -312,9 +315,11 @@ Level generateLevel(int level, double w, double h,
       ));
     }
   }
-  if (ch >= 3 && level > 4) {
+  // Нестабильный узел (таймер): позже, не на каждом уровне и с
+  // заметно большим запасом — он должен подгонять, а не убивать.
+  if (ch >= 3 && level > 9 && r() < 0.6) {
     bombIdx = rnd.nextInt(nodes.length);
-    bombLeft = math.max(4, (nodes.length * 0.9).round());
+    bombLeft = math.max(6, (nodes.length * 1.3).round());
   }
 
   // После привязки к гнёздам ещё раз гарантируем запутанность.
@@ -354,7 +359,9 @@ Level generateLevel(int level, double w, double h,
       pool.add(1 + rnd.nextInt(math.min(3, 1 + level ~/ 9)));
     }
     if (kd == -1) pool = [];
-    pool = pool.take(kd == 2 ? 2 : 2).toList();
+    // До 25-й связи — максимум ОДИН тип препятствия за уровень: середина
+    // игры не должна наваливать всё сразу.
+    pool = pool.take(level > 25 ? 2 : 1).toList();
   }
   for (final t in pool) {
     if (t == 5) {
@@ -408,7 +415,8 @@ Level generateLevel(int level, double w, double h,
       if (nl >= 0) ntype[nl] = 3;
       continue;
     }
-    final cnt = forced != null ? 1 : 1 + rnd.nextInt(math.min(2, 1 + level ~/ 14));
+    // Два экземпляра одного препятствия — только после 30-й связи.
+    final cnt = forced != null ? 1 : 1 + rnd.nextInt(level >= 30 ? 2 : 1);
     for (var i = 0; i < cnt; i++) {
       var idx = rnd.nextInt(nodes.length);
       var g = 0;
@@ -461,7 +469,9 @@ Level generateLevel(int level, double w, double h,
   }
   solveCost = math.max(2, solveCost);
 
-  final ease = 1.9 - 0.65 * math.min(1.0, (level - 1) / 45.0);
+  // Запас скромный с самого начала (лишние «свободные» ходы обесценивают
+  // задачу) и ужимается медленно — сложность растёт клубком, а не ходами.
+  final ease = 1.7 - 0.4 * math.min(1.0, (level - 1) / 60.0);
   final kindK = const {-1: 1.15, 0: 1.0, 1: 0.92, 2: 0.85}[kd]!;
   var movesMax = math.max(solveCost + 2, (solveCost * ease * kindK).round());
   // Кабель под напряжением поджимает бюджет, но не ниже решаемого.

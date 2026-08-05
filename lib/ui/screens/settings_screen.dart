@@ -20,12 +20,16 @@ const kLangNames = {
   'ar': 'العربية',
 };
 
-/// Экран настроек: тумблеры, язык, интро, политика, сброс.
+/// Экран настроек: тумблеры, язык, интро, правила, политика, сброс.
 class SettingsScreen extends StatelessWidget {
   final VoidCallback onShowIntro;
+  final VoidCallback onShowRules;
   final VoidCallback onShowPrivacy;
   const SettingsScreen(
-      {super.key, required this.onShowIntro, required this.onShowPrivacy});
+      {super.key,
+      required this.onShowIntro,
+      required this.onShowRules,
+      required this.onShowPrivacy});
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +59,12 @@ class SettingsScreen extends StatelessWidget {
         StaggerIn(
             index: 5,
             child: GhostButton(onTap: onShowIntro, child: Text(app.t('intro')))),
+        const SizedBox(height: 10),
+        // Все правила игры одним экраном — как политика, только про игру.
+        StaggerIn(
+            index: 6,
+            child:
+                GhostButton(onTap: onShowRules, child: Text(app.lt('rulesBtn')))),
         const SizedBox(height: 10),
         StaggerIn(
             index: 6,

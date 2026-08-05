@@ -75,10 +75,12 @@ class Booster {
   const Booster(this.key, this.icon, this.cost);
 }
 
+// Цены под дневной доход осколков (~4–6): бустер — покупка «сегодня»,
+// а не накопление на неделю.
 const kBoosters = [
-  Booster('cut', 'cut', 6),
-  Booster('stab', 'timer', 4),
-  Booster('auto', 'target', 8),
+  Booster('cut', 'cut', 5),
+  Booster('stab', 'timer', 3),
+  Booster('auto', 'target', 7),
 ];
 
 /// Уровень первого появления каждой механики: level → тип препятствия.

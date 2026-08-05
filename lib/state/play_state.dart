@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import '../core/audio.dart';
 import '../core/haptics.dart';
 import '../core/notifications.dart';
-import '../data/game_data.dart';
 import '../game/geometry.dart';
 import '../game/level.dart';
 import 'app_state.dart';
@@ -428,9 +427,9 @@ class PlayState extends ChangeNotifier {
       }
       if (pickIdx >= 0 && bi == pickIdx) {
         pickIdx = -1;
-        final rk = kBoosters[math.Random().nextInt(kBoosters.length)].key;
-        app.inv[rk] = app.inv[rk]! + 1;
-        app.save();
+        // Ровно то, что обещает карточка «Энергоблок»: +2 хода.
+        // (Раньше падал случайный бустер — текст и механика расходились.)
+        moves += 2;
         onToast?.call(app.t('pickGot'));
         GameAudio.instance.tone(1100, .14, 'sine', .06);
         Haptics.instance.success();
