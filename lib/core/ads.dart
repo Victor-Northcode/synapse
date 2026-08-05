@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 /// Плейсменты rewarded-рекламы: у каждого свой блок AdMob, чтобы в
@@ -60,8 +61,24 @@ class Ads {
   };
 
   /// В дебаге ОБЯЗАТЕЛЬНО тестовые блоки: клики по своей боевой рекламе
-  /// во время разработки — бан аккаунта AdMob.
+  /// во время разработки — бан аккаунта AdMob. В TestFlight — тоже
+  /// тестовые (флаг досылается в [init]): это release-сборка, но в App
+  /// Store уходит ТОТ ЖЕ бинарь, поэтому отличаем по чеку в рантайме.
   bool useTestAds = kDebugMode;
+
+  static const _envChannel = MethodChannel('synapse/env');
+
+  /// TestFlight-сборка? (iOS: у sandbox-чека имя sandboxReceipt; в App
+  /// Store — receipt.) Канал живёт в Runner/AppDelegate.swift; если его
+  /// нет — считаем, что не TestFlight, и падаем закрыто.
+  Future<bool> _isTestFlight() async {
+    if (kIsWeb || !Platform.isIOS) return false;
+    try {
+      return await _envChannel.invokeMethod<bool>('isTestFlight') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 
   // В вебе Platform недоступен и рекламного SDK нет — реклама выключена.
   bool get hasAds => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
@@ -144,6 +161,9 @@ class Ads {
   Future<void> init() {
     return _initFuture ??= () async {
       if (!hasAds) return;
+      // TestFlight крутит тестовые блоки — решается ДО первой загрузки:
+      // все пути к рекламе (rewarded/preload/interstitial) идут через init.
+      if (!useTestAds && await _isTestFlight()) useTestAds = true;
       // Возрастная конфигурация — ДО сбора согласия и инициализации.
       await _applyRequestConfig();
       await _gatherConsent();

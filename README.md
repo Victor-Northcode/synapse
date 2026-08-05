@@ -92,9 +92,17 @@ HTML — править только через генератор, чтобы �
 
 1. **Реклама.** Боевые id уже прописаны: app id в манифестах, блоки
    по плейсментам в `lib/core/ads.dart` (`_realUnit`/`_realInterUnit`).
-   Дебажная сборка автоматически крутит ТЕСТОВЫЕ блоки Google
-   (`useTestAds = kDebugMode`) — клики по своей боевой рекламе во
-   время разработки ведут к бану аккаунта AdMob.
+   Тестовые блоки Google включаются автоматически в дебаге
+   (`useTestAds = kDebugMode`) И в TestFlight (рантайм-чек
+   sandboxReceipt через канал `synapse/env` в AppDelegate.swift) —
+   в App Store уходит тот же бинарь, там чек боевой и реклама боевая.
+   Клики по своей боевой рекламе = бан аккаунта AdMob.
+   До полноценного показа: опубликовать приложение в сторах, связать
+   его со стор-листингом в AdMob (проверка 2–3 дня) и выложить
+   `app-ads.txt` (готовый файл — `game/out/app-ads.txt`, UTF-8 без
+   BOM) на https://pazl.ai/app-ads.txt; этот же адрес должен стоять
+   Marketing URL в App Store Connect и сайтом разработчика в Play
+   Console. До одобрения боевая отдаёт no fill (код 3) — это норма.
 2. **Подпись.** Release пока подписывается debug-ключом. Создать
    keystore и прописать в `android/app/build.gradle.kts`.
 3. **iOS.** `NSUserTrackingUsageDescription` уже в Info.plist.
