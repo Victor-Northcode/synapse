@@ -24,7 +24,7 @@
 		<key>CFBundleDisplayName</key>
 		<string>SYNAPSE</string>
 		<key>NSUserTrackingUsageDescription</key>
-		<string>Your data will be used to deliver personalised ads. Decline and ads stay, just non-personalised.</string>
+		<string>Your data will be used to deliver personalized ads. If you decline, ads remain but aren't personalized.</string>
 		<key>GADApplicationIdentifier</key>
 		<string>ca-app-pub-8344059151047879~2696455253</string>
 		<!-- SKAdNetwork: атрибуция установок без IDFA. Список из
