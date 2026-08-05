@@ -127,6 +127,9 @@ void main() {
         await tester.pump(const Duration(milliseconds: 2750)); // загрузка
         await tester.pump(const Duration(milliseconds: 200));
         await tester.tap(find.byType(PillButton).first);
+        // Двойной pump: первый кадр лишь ЗАПУСКАЕТ SlideUpIn игрового
+        // экрана — без него в захват попадает хаб вместо поля.
+        await tester.pump();
         await tester.pump(const Duration(milliseconds: 1300)); // pop узлов
         n = 1;
         await expectLater(find.byType(MaterialApp).first,
@@ -204,6 +207,9 @@ void main() {
         await tester.pump(const Duration(milliseconds: 2750));
         await tester.pump(const Duration(milliseconds: 200));
         await tester.tap(find.text(app6.t('tab2')).first);
+        // Двойной pump: AnimatedSwitcher вкладок стартует первым кадром,
+        // иначе в захвате журнал вместо склада.
+        await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
         n = 6;
         await expectLater(find.byType(MaterialApp).first,
