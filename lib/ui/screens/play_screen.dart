@@ -545,6 +545,27 @@ class _PlayScreenState extends State<PlayScreen> with SingleTickerProviderStateM
         ),
       );
     }
+    // Подсказки кончились и дневной лимит роликов выбран — кнопка
+    // без рекламы: тап объясняет, что подсказку можно купить на складе.
+    if (!app.canAdHint) {
+      return _mini(
+        height: height,
+        onTap: () => widget.onInfo(app.t('hintBuyD')),
+        child: const Opacity(
+          opacity: .45,
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            GameIcon('bulb', size: 14, color: Pal.dim),
+            SizedBox(width: 3),
+            Text('×0',
+                style: TextStyle(
+                    fontFamily: Fonts.disp,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    color: Pal.dim)),
+          ]),
+        ),
+      );
+    }
     // Подсказки кончились — предлагаем ролик; долгое нажатие поясняет.
     return GestureDetector(
       onLongPress: () => widget.onInfo(app.t('hintAd')),

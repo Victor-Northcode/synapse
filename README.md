@@ -36,8 +36,8 @@ flutter build ipa --release        # iOS: ТОЛЬКО на macOS с Xcode —
 ```
 
 iOS-проект полностью подготовлен (портретная блокировка, ATT-описание,
-тестовый GADApplicationIdentifier) — на Mac достаточно открыть проект,
-выбрать команду подписи и выполнить `flutter build ipa`.
+боевой GADApplicationIdentifier, SKAdNetworkItems) — на Mac достаточно
+открыть проект, выбрать команду подписи и выполнить `flutter build ipa`.
 
 Без Mac под рукой IPA собирает workflow `.github/workflows/ios-ipa.yml`
 (репозиторий Victor-Northcode/synapse): GitHub Actions
@@ -90,11 +90,11 @@ HTML — править только через генератор, чтобы �
 
 ## Перед публикацией
 
-1. **Реклама.** Сейчас стоят официальные ТЕСТОВЫЕ блоки Google.
-   Заменить: `lib/core/ads.dart` → `_realUnit`, и app id в
-   `android/app/src/main/AndroidManifest.xml`
-   (`com.google.android.gms.ads.APPLICATION_ID`). Тестовые id в
-   проде — нарушение политики AdMob.
+1. **Реклама.** Боевые id уже прописаны: app id в манифестах, блоки
+   по плейсментам в `lib/core/ads.dart` (`_realUnit`/`_realInterUnit`).
+   Дебажная сборка автоматически крутит ТЕСТОВЫЕ блоки Google
+   (`useTestAds = kDebugMode`) — клики по своей боевой рекламе во
+   время разработки ведут к бану аккаунта AdMob.
 2. **Подпись.** Release пока подписывается debug-ключом. Создать
    keystore и прописать в `android/app/build.gradle.kts`.
 3. **iOS.** `NSUserTrackingUsageDescription` уже в Info.plist.

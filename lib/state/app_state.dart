@@ -73,6 +73,7 @@ class AppState extends ChangeNotifier {
   int adShards = 0;
   int adItems = 0; // предметы за ролик в текущем часе (лимит 3)
   int adItemHour = 0; // номер часа от эпохи — окно лимита предметов
+  int adHints = 0; // подсказки за ролик сегодня (лимит 6)
 
   /// Мастерская: ключ апгрейда → купленный уровень.
   Map<String, int> upgrades = {};
@@ -92,6 +93,17 @@ class AppState extends ChangeNotifier {
   bool musicOn = true;
   int theme = 0;
   List<int> owned = List.generate(kThemes.length, (i) => i == 0 ? 1 : 0);
+
+  /// «Тема на сутки»: метка истечения примерки (мс эпохи) по индексу
+  /// темы, 0 — примерки нет. Витрина: игрок сутки живёт в теме,
+  /// привыкает — потом легче отдаёт осколки.
+  List<int> trialUntil = List.filled(kThemes.length, 0);
+
+  /// День эпохи, когда смотрели trial-ролик: один в день на ВСЕ темы.
+  int trialAdDay = 0;
+
+  /// Последняя честно купленная тема — сюда откатываемся по истечении.
+  int preTrialTheme = 0;
   List<bool> done = [];
   int hintBought = 0;
   bool soundOn = true;
@@ -113,7 +125,14 @@ class AppState extends ChangeNotifier {
 
   void Function(GameEvent event)? onEvent;
 
-  GameTheme get gameTheme => kThemes[theme];
+  /// Отрисовываемая тема: истёкшая примерка не рисуется даже до того,
+  /// как [_checkTrials] успел откатить поле [theme] в сейве.
+  GameTheme get gameTheme => kThemes[_validTheme(theme)];
+
+  int _validTheme(int ti) {
+    if (owned[ti] == 1 || themeTrialActive(ti)) return ti;
+    return owned[preTrialTheme] == 1 ? preTrialTheme : 0;
+  }
   bool get isRtl => lang == 'ar';
 
   // ---------- локализация ----------
@@ -239,6 +258,7 @@ class AppState extends ChangeNotifier {
       adShards = (sv['ads'] as num?)?.toInt() ?? 0;
       adItems = (sv['adb'] as num?)?.toInt() ?? 0;
       adItemHour = (sv['adbh'] as num?)?.toInt() ?? 0;
+      adHints = (sv['adh'] as num?)?.toInt() ?? 0;
       if (sv['up'] is Map) {
         upgrades = {
           for (final e in (sv['up'] as Map).entries)
@@ -263,6 +283,15 @@ class AppState extends ChangeNotifier {
           owned.add(0);
         }
       }
+      if (sv['tru'] is List) {
+        trialUntil = [for (final v in sv['tru'] as List) (v as num).toInt()];
+        while (trialUntil.length < kThemes.length) {
+          trialUntil.add(0);
+        }
+      }
+      trialAdDay = (sv['trd'] as num?)?.toInt() ?? 0;
+      preTrialTheme =
+          ((sv['trp'] as num?)?.toInt() ?? 0).clamp(0, kThemes.length - 1);
       soundOn = sv['so'] != false;
       soundVol = ((sv['vol'] as num?)?.toDouble() ?? 1.0).clamp(0.5, 2.0);
       vibroOn = sv['vi'] != false;
@@ -311,6 +340,7 @@ class AppState extends ChangeNotifier {
       'ads': adShards,
       'adb': adItems,
       'adbh': adItemHour,
+      'adh': adHints,
       'up': upgrades,
       'bl': bestLevel,
       'bs': bestStreak,
@@ -322,6 +352,9 @@ class AppState extends ChangeNotifier {
       'mu': musicOn,
       'th': theme,
       'ow': owned,
+      'tru': trialUntil,
+      'trd': trialAdDay,
+      'trp': preTrialTheme,
       'ch': chapter,
       'dn': done,
       'hbq': hintBought,
@@ -434,6 +467,9 @@ class AppState extends ChangeNotifier {
 
   void checkDay() {
     _checkWeek();
+    // Примерки живут 24 часа от ролика, а не до смены суток, — их
+    // проверяем до раннего выхода «день не сменился».
+    _checkTrials();
     final td = _today();
     if (dayKey == td) return;
     final prev = dayKey;
@@ -441,6 +477,7 @@ class AppState extends ChangeNotifier {
     gp = [0, 0, 0];
     gDone = [false, false, false];
     adShards = 0;
+    adHints = 0;
     convUsed = 0;
     // «Запасная подсказка» из мастерской: +1 в день за каждый уровень.
     hintStock += dailyHintBonus;
@@ -713,9 +750,74 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  // ---------- тема на сутки ----------
+  int get _thisEpochDay =>
+      DateTime.now().toUtc().millisecondsSinceEpoch ~/ 86400000;
+
+  bool themeTrialActive(int ti) =>
+      owned[ti] == 0 && trialUntil[ti] > DateTime.now().millisecondsSinceEpoch;
+
+  /// Остаток примерки в часах (для карточки темы), минимум 1.
+  int trialHoursLeft(int ti) => math.max(
+      1,
+      ((trialUntil[ti] - DateTime.now().millisecondsSinceEpoch) / 3600000)
+          .ceil());
+
+  /// Один trial-ролик в день на все темы разом.
+  bool get canThemeTrial => Ads.instance.hasAds && trialAdDay != _thisEpochDay;
+
+  /// Истёкшие примерки: сброс метки и откат на последнюю честно
+  /// купленную тему. Вызывается из [checkDay] — тот дёргается при
+  /// возврате в приложение, победах и действиях в хабе.
+  void _checkTrials() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var changed = false;
+    for (var ti = 0; ti < trialUntil.length; ti++) {
+      if (trialUntil[ti] == 0 || (owned[ti] == 0 && trialUntil[ti] > now)) {
+        continue;
+      }
+      trialUntil[ti] = 0;
+      changed = true;
+      if (theme == ti && owned[ti] == 0) {
+        theme = owned[preTrialTheme] == 1 ? preTrialTheme : 0;
+        onEvent?.call(GameEvent(GameEventType.toast, text: t('thTrialEnd')));
+      }
+    }
+    if (changed) {
+      save();
+      notifyListeners();
+    }
+  }
+
+  Future<void> watchAdForThemeTrial(int ti) async {
+    checkDay();
+    if (owned[ti] == 1 || themeTrialActive(ti) || !canThemeTrial) return;
+    onEvent?.call(GameEvent(GameEventType.toast, text: t('adWatch')));
+    final ok = await Ads.instance.rewarded(AdSlot.theme);
+    if (!ok) {
+      onEvent?.call(GameEvent(GameEventType.toast,
+          text: Ads.instance.hasAds ? t('adFail') : t('adOff')));
+      return;
+    }
+    trialAdDay = _thisEpochDay;
+    if (owned[theme] == 1) preTrialTheme = theme;
+    trialUntil[ti] =
+        DateTime.now().millisecondsSinceEpoch + 24 * 3600 * 1000;
+    theme = ti;
+    save();
+    GameAudio.instance.chord([660, 880]);
+    Haptics.instance.success();
+    final th = kThemes[ti];
+    onEvent?.call(GameEvent(GameEventType.toast,
+        text: t('thTrialGot')
+            .replaceAll('{n}', lang == 'ru' ? th.nameRu : th.nameEn)));
+    notifyListeners();
+  }
+
   void selectTheme(int ti) {
     final th = kThemes[ti];
-    if (owned[ti] == 0) {
+    // Активная примерка применяется как купленная — без списания.
+    if (owned[ti] == 0 && !themeTrialActive(ti)) {
       if (shards < th.cost) {
         onEvent?.call(GameEvent(GameEventType.toast,
             text: t('needSh').replaceAll('{n}', '${th.cost - shards}')));
@@ -734,6 +836,11 @@ class AppState extends ChangeNotifier {
   }
 
   bool get canAdShard => adShards < 3 && Ads.instance.hasAds;
+
+  /// Подсказка за ролик: до [adHintLimit] в день — бесконечный фарм
+  /// просаживает eCPM. Когда лимит выбран, кнопка ролика в игре прячется.
+  static const adHintLimit = 6;
+  bool get canAdHint => adHints < adHintLimit && Ads.instance.hasAds;
 
   /// Товар за ролик: до [adItemLimit] предметов В ЧАС (осколки — 3 в
   /// день, а предметы восполняются каждый час). Кнопка появляется на
@@ -767,7 +874,7 @@ class AppState extends ChangeNotifier {
     checkDay();
     if (!canAdItem) return;
     onEvent?.call(GameEvent(GameEventType.toast, text: t('adWatch')));
-    final ok = await Ads.instance.rewarded();
+    final ok = await Ads.instance.rewarded(AdSlot.item);
     if (!ok) {
       onEvent?.call(GameEvent(GameEventType.toast,
           text: Ads.instance.hasAds ? t('adFail') : t('adOff')));
@@ -794,7 +901,7 @@ class AppState extends ChangeNotifier {
   Future<void> watchAdForShards() async {
     if (adShards >= 3) return;
     onEvent?.call(GameEvent(GameEventType.toast, text: t('adWatch')));
-    final ok = await Ads.instance.rewarded();
+    final ok = await Ads.instance.rewarded(AdSlot.shard);
     if (!ok) {
       onEvent?.call(GameEvent(GameEventType.toast,
           text: Ads.instance.hasAds ? t('adFail') : t('adOff')));
@@ -876,6 +983,7 @@ class AppState extends ChangeNotifier {
     adShards = 0;
     adItems = 0;
     adItemHour = 0;
+    adHints = 0;
     upgrades = {};
     bestLevel = 0;
     bestStreak = 0;
@@ -896,6 +1004,9 @@ class AppState extends ChangeNotifier {
     wgDone = [false, false, false];
     theme = 0;
     owned = List.generate(kThemes.length, (i) => i == 0 ? 1 : 0);
+    trialUntil = List.filled(kThemes.length, 0);
+    trialAdDay = 0;
+    preTrialTheme = 0;
     introSeen = false;
     buildChapter();
     checkDay();

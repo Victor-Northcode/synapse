@@ -38,7 +38,10 @@ class _ResultOverlayState extends State<ResultOverlay> {
     if (_adBusy || _adUsed) return;
     setState(() => _adBusy = true);
     widget.onToast(app.t('adWatch'));
-    final ok = await Ads.instance.rewarded();
+    // Победа — «удвоить награду», провал — «продолжить»: разные блоки,
+    // чтобы в консоли AdMob было видно доход каждого плейсмента.
+    final ok = await Ads.instance
+        .rewarded(widget.result.win ? AdSlot.double_ : AdSlot.continue_);
     if (!mounted) return;
     setState(() => _adBusy = false);
     if (!ok) {

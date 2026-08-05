@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../core/ads.dart';
 import '../core/audio.dart';
+import '../core/interstitial_gate.dart';
 import '../core/haptics.dart';
 import '../core/palette.dart';
 import '../state/app_state.dart';
@@ -44,6 +45,10 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
   int storyDay = 0;
   bool showPrivacy = false;
   bool showRules = false;
+
+  /// Гейт interstitial живёт столько же, сколько корень, — его счётчики
+  /// и есть «сессия» из конфига.
+  final _adGate = InterstitialGate();
 
   // Тост.
   String? toastText;
@@ -169,7 +174,15 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
     }
     final p = PlayState(app, w, h);
     p.onToast = _toast;
-    p.onWin = () => setState(() => showResult = true);
+    p.onWin = () {
+      // Победа считается в момент выигрыша: уход в хаб её не стирает.
+      _adGate.recordWin();
+      final r = p.result;
+      if (r != null && _adGate.readyToPreload(r.level)) {
+        Ads.instance.preloadInterstitial();
+      }
+      setState(() => showResult = true);
+    };
     p.onBoom = () => setState(() => showResult = true);
     p.addListener(_syncCard);
     final old = play;
@@ -181,6 +194,34 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
     p.start(lvl);
     _cardVisible = p.pendingCard != null;
     GameAudio.instance.setMusicScene(MusicScene.play);
+    // Ролики этого экрана — в фон заранее: тап покажет их без ожидания.
+    Ads.instance.preload(AdSlot.hint);
+    Ads.instance.preload(AdSlot.double_);
+    Ads.instance.preload(AdSlot.continue_);
+    Ads.instance.preloadInterstitial();
+  }
+
+  /// «Дальше» на экране результата: слот interstitial — здесь, между
+  /// закрытием оверлея и загрузкой следующего уровня (после перегрузки —
+  /// никогда: там игрок хочет немедленный повтор). Если ролик не успел
+  /// загрузиться — слот пропускается без ожидания, счётчик сохраняется.
+  Future<void> _nextLevel(LevelResult r) async {
+    final show = _adGate.shouldShowInterstitial(
+      win: r.win,
+      level: r.level,
+      lastRewardedAt: Ads.instance.lastRewardedAt,
+    );
+    if (show && await Ads.instance.showInterstitial()) _adGate.markShown();
+    if (!mounted) return;
+    _startLevel(r.win ? app.level : r.level);
+  }
+
+  /// Ролики склада — в фон при входе в хаб (повторный вызов дешёвый:
+  /// загруженное живо час, preload выходит сразу).
+  void _preloadHubAds() {
+    Ads.instance.preload(AdSlot.shard);
+    Ads.instance.preload(AdSlot.item);
+    Ads.instance.preload(AdSlot.theme);
   }
 
   void _quitToHub() {
@@ -191,15 +232,19 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
     });
     _retire(old);
     GameAudio.instance.setMusicScene(MusicScene.menu);
+    _preloadHubAds();
   }
 
   Future<void> _hintViaAd() async {
+    // Дневной лимит: бесконечный фарм подсказок просаживает eCPM.
+    if (!app.canAdHint) return;
     _toast(app.t('adWatch'));
-    final ok = await Ads.instance.rewarded();
+    final ok = await Ads.instance.rewarded(AdSlot.hint);
     if (!ok) {
       _toast(Ads.instance.hasAds ? app.t('adFail') : app.t('adOff'));
       return;
     }
+    app.adHints++;
     app.hintStock++;
     app.save();
     app.notify();
@@ -211,6 +256,7 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
   bool showAgeGate = false;
 
   void _bootDone() {
+    _preloadHubAds();
     setState(() {
       booting = false;
       // Возрастной экран — раньше всего остального (и любой рекламы).
@@ -336,7 +382,10 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
                 ),
                 BottomNav(
                   index: tab,
-                  onTap: (i) => setState(() => tab = i),
+                  onTap: (i) {
+                    if (i == 1) _preloadHubAds(); // склад: осколки/предметы/темы
+                    setState(() => tab = i);
+                  },
                   items: [
                     NavItem('folder', app.t('tab0')),
                     NavItem('cube', app.t('tab2')),
@@ -383,7 +432,7 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
                     app: app,
                     result: p.result!,
                     onToast: _toast,
-                    onNext: () => _startLevel(p.result!.win ? app.level : p.result!.level),
+                    onNext: () => _nextLevel(p.result!),
                     onHub: _quitToHub,
                     onContinue: () {
                       setState(() => showResult = false);

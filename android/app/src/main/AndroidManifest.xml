@@ -30,11 +30,12 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- ТЕСТОВЫЙ app id AdMob (официальный от Google).
-             Перед релизом заменить на собственный. -->
+        <!-- Боевой app id AdMob (издатель ca-app-pub-8344059151047879).
+             Блоки объявлений — в lib/core/ads.dart; дебажная сборка
+             крутит тестовые блоки Google (useTestAds = kDebugMode). -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
+            android:value="ca-app-pub-8344059151047879~2997386319"/>
 
         <!-- Play Games Services (лидерборды). Project ID из Play Console →
              Play Games Services → Configuration. Пока стоит заглушка —

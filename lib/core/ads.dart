@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-/// Реклама за награду — порт модуля NATIVE.
+/// Плейсменты rewarded-рекламы: у каждого свой блок AdMob, чтобы в
+/// консоли было видно, какое место сколько приносит.
+enum AdSlot { hint, double_, continue_, shard, item, theme }
+
+/// Реклама — порт модуля NATIVE.
 ///
 /// Всё «падает закрыто»: если SDK не настроен, согласия нет или ролик
 /// закрыт крестиком — награда НЕ выдаётся, возвращается false.
@@ -13,23 +17,66 @@ class Ads {
   Ads._();
   static final Ads instance = Ads._();
 
-  /// Официальные ТЕСТОВЫЕ блоки Google. Перед релизом подставить свои
-  /// в [_realUnit]: тестовые id в проде — нарушение политики AdMob.
+  /// Боевые блоки (издатель ca-app-pub-8344059151047879).
+  static const _realUnit = {
+    AdSlot.hint: {
+      'android': 'ca-app-pub-8344059151047879/1549477233',
+      'ios': 'ca-app-pub-8344059151047879/5427464336',
+    },
+    AdSlot.double_: {
+      'android': 'ca-app-pub-8344059151047879/2097372221',
+      'ios': 'ca-app-pub-8344059151047879/6373714493',
+    },
+    AdSlot.continue_: {
+      'android': 'ca-app-pub-8344059151047879/7293858581',
+      'ios': 'ca-app-pub-8344059151047879/7731742202',
+    },
+    AdSlot.shard: {
+      'android': 'ca-app-pub-8344059151047879/5980776919',
+      'ios': 'ca-app-pub-8344059151047879/1658388527',
+    },
+    AdSlot.item: {
+      'android': 'ca-app-pub-8344059151047879/3146730018',
+      'ios': 'ca-app-pub-8344059151047879/5130729673',
+    },
+    AdSlot.theme: {
+      'android': 'ca-app-pub-8344059151047879/2354578438',
+      'ios': 'ca-app-pub-8344059151047879/1971435052',
+    },
+  };
+  static const _realInterUnit = {
+    'android': 'ca-app-pub-8344059151047879/9366709346',
+    'ios': 'ca-app-pub-8344059151047879/2955158324',
+  };
+
+  /// Официальные ТЕСТОВЫЕ блоки Google — для разработки.
   static const _testUnit = {
     'android': 'ca-app-pub-3940256099942544/5224354917',
     'ios': 'ca-app-pub-3940256099942544/1712485313',
   };
-  static const _realUnit = {'android': '', 'ios': ''};
+  static const _testInterUnit = {
+    'android': 'ca-app-pub-3940256099942544/1033173712',
+    'ios': 'ca-app-pub-3940256099942544/4411468910',
+  };
+
+  /// В дебаге ОБЯЗАТЕЛЬНО тестовые блоки: клики по своей боевой рекламе
+  /// во время разработки — бан аккаунта AdMob.
+  bool useTestAds = kDebugMode;
 
   // В вебе Platform недоступен и рекламного SDK нет — реклама выключена.
   bool get hasAds => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-  bool get usingTestAds => _unit == _testUnit[_platform];
+  bool get usingTestAds => useTestAds;
 
   String get _platform => Platform.isIOS ? 'ios' : 'android';
-  String get _unit {
-    final real = _realUnit[_platform];
-    return (real != null && real.isNotEmpty) ? real : _testUnit[_platform]!;
-  }
+  String _unit(AdSlot slot) =>
+      useTestAds ? _testUnit[_platform]! : _realUnit[slot]![_platform]!;
+  String get _interUnit =>
+      useTestAds ? _testInterUnit[_platform]! : _realInterUnit[_platform]!;
+
+  /// Когда игрок в последний раз ДОСМОТРЕЛ любой rewarded (x2, продолжение,
+  /// подсказка, магазин). Нужна interstitial-гейту: после rewarded держим
+  /// паузу, чтобы не поймать две рекламы подряд.
+  DateTime? lastRewardedAt;
 
   bool _canAds = true;
   bool _privacyOptionsRequired = false;
@@ -120,14 +167,53 @@ class Ads {
     return completer.future;
   }
 
+  // ---------- предзагрузка ----------
+  /// AdMob инвалидирует объявления примерно через час — старое
+  /// выбрасываем и грузим заново.
+  static const _adTtl = Duration(hours: 1);
+
+  final _rewardedCache = <AdSlot, (RewardedAd, DateTime)>{};
+  final _rewardedLoading = <AdSlot>{};
+
+  /// Загрузить ролик слота в фон: тап по кнопке покажет его мгновенно.
+  /// Ошибки глотаются — просто останемся без кэша и загрузим по тапу.
+  void preload(AdSlot slot) {
+    if (!hasAds || _rewardedLoading.contains(slot)) return;
+    if (_freshRewarded(slot) != null) return;
+    _rewardedLoading.add(slot);
+    () async {
+      try {
+        await init();
+        if (!_canAds) return;
+        final ad = await _loadRewarded(slot);
+        if (ad != null) _rewardedCache[slot] = (ad, DateTime.now());
+      } catch (_) {
+      } finally {
+        _rewardedLoading.remove(slot);
+      }
+    }();
+  }
+
+  /// Свежий кэш слота; просроченный — утилизируется на месте.
+  RewardedAd? _freshRewarded(AdSlot slot) {
+    final c = _rewardedCache[slot];
+    if (c == null) return null;
+    if (DateTime.now().difference(c.$2) < _adTtl) return c.$1;
+    _rewardedCache.remove(slot);
+    c.$1.dispose();
+    return null;
+  }
+
   /// Резолвится true ТОЛЬКО когда ролик действительно досмотрен.
-  Future<bool> rewarded() async {
+  Future<bool> rewarded(AdSlot slot) async {
     if (!hasAds) return false;
     try {
       await init();
       if (!_canAds) return false;
 
-      final ad = await _load();
+      var ad = _freshRewarded(slot);
+      if (ad != null) _rewardedCache.remove(slot);
+      ad ??= await _loadRewarded(slot);
       if (ad == null) return false;
 
       final result = Completer<bool>();
@@ -135,6 +221,8 @@ class Ads {
       ad.fullScreenContentCallback = FullScreenContentCallback(
         onAdDismissedFullScreenContent: (ad) {
           ad.dispose();
+          lastRewardedAt = DateTime.now();
+          preload(slot); // следующий ролик — сразу в фон
           if (!result.isCompleted) result.complete(earned);
         },
         onAdFailedToShowFullScreenContent: (ad, error) {
@@ -149,10 +237,10 @@ class Ads {
     }
   }
 
-  Future<RewardedAd?> _load() {
+  Future<RewardedAd?> _loadRewarded(AdSlot slot) {
     final completer = Completer<RewardedAd?>();
     RewardedAd.load(
-      adUnitId: _unit,
+      adUnitId: _unit(slot),
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) => completer.complete(ad),
@@ -160,5 +248,77 @@ class Ads {
       ),
     );
     return completer.future;
+  }
+
+  // ---------- interstitial между уровнями ----------
+  (InterstitialAd, DateTime)? _inter;
+  bool _interLoading = false;
+
+  /// Загрузить interstitial заранее — пока игрок проходит уровень.
+  /// Показ без предзагрузки рвал бы переход на следующий уровень.
+  void preloadInterstitial() {
+    if (!hasAds || _interLoading) return;
+    final c = _inter;
+    if (c != null) {
+      if (DateTime.now().difference(c.$2) < _adTtl) return;
+      _inter = null;
+      c.$1.dispose(); // протухший (AdMob инвалидирует через час)
+    }
+    _interLoading = true;
+    () async {
+      try {
+        await init();
+        if (!_canAds) {
+          _interLoading = false;
+          return;
+        }
+        InterstitialAd.load(
+          adUnitId: _interUnit,
+          request: const AdRequest(),
+          adLoadCallback: InterstitialAdLoadCallback(
+            onAdLoaded: (ad) {
+              _inter = (ad, DateTime.now());
+              _interLoading = false;
+            },
+            onAdFailedToLoad: (error) => _interLoading = false,
+          ),
+        );
+      } catch (_) {
+        _interLoading = false;
+      }
+    }();
+  }
+
+  /// Показать предзагруженный interstitial. Резолвится после закрытия,
+  /// true — если реклама была показана. Если ролик не готов или протух —
+  /// мгновенно false: слот пропускается, игра не ждёт (падаем закрыто,
+  /// как и весь модуль).
+  Future<bool> showInterstitial() async {
+    final c = _inter;
+    if (!hasAds || c == null) return false;
+    _inter = null;
+    if (DateTime.now().difference(c.$2) >= _adTtl) {
+      c.$1.dispose();
+      preloadInterstitial();
+      return false;
+    }
+    try {
+      final result = Completer<bool>();
+      c.$1.fullScreenContentCallback = FullScreenContentCallback(
+        onAdDismissedFullScreenContent: (ad) {
+          ad.dispose();
+          preloadInterstitial(); // следующий — сразу в фон
+          if (!result.isCompleted) result.complete(true);
+        },
+        onAdFailedToShowFullScreenContent: (ad, error) {
+          ad.dispose();
+          if (!result.isCompleted) result.complete(false);
+        },
+      );
+      await c.$1.show();
+      return result.future.timeout(const Duration(minutes: 3), onTimeout: () => true);
+    } catch (_) {
+      return false;
+    }
   }
 }

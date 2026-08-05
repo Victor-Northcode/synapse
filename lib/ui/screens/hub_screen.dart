@@ -424,9 +424,37 @@ class HubScreen extends StatelessWidget {
     );
   }
 
+  /// Кнопка «примерить за ролик»: сутки в теме бесплатно. Витрина —
+  /// игрок привыкает, потом легче отдаёт осколки. Без слов: значок
+  /// ролика + «24H», понятно на всех языках.
+  Widget _trialPill(AppState app, int ti) {
+    return Pressable(
+      onTap: () => app.watchAdForThemeTrial(ti),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0x1CFFD400),
+          border: Border.all(color: const Color(0x66FFD400)),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: const [
+          GameIcon('tv', size: 10, color: Pal.yellow),
+          SizedBox(width: 3),
+          Text('24H',
+              style: TextStyle(
+                  fontFamily: Fonts.disp,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 8.5,
+                  color: Pal.yellow)),
+        ]),
+      ),
+    );
+  }
+
   Widget _themeCard(AppState app, int ti) {
     final th = kThemes[ti];
     final own = app.owned[ti] == 1;
+    final trial = app.themeTrialActive(ti);
     final cur = app.theme == ti;
     return Pressable(
       onTap: () => app.selectTheme(ti),
@@ -462,18 +490,36 @@ class HubScreen extends StatelessWidget {
                   style: const TextStyle(
                       fontFamily: Fonts.mono, fontSize: 10.5, color: Pal.text)),
             ),
-            if (own && cur)
+            if ((own || trial) && cur)
               const Glyph(GlyphKind.check, size: 15, color: Pal.green)
+            else if (trial)
+              // Активная примерка: остаток часов, тап применяет бесплатно.
+              Text('${app.trialHoursLeft(ti)}h',
+                  style: const TextStyle(
+                      fontFamily: Fonts.disp,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Pal.cyan))
+            else if (own)
+              IconText(app.t('thUse'),
+                  style: const TextStyle(
+                      fontFamily: Fonts.disp,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: Pal.cyan))
             else
-              IconText(
-                own ? app.t('thUse') : '${th.cost}✦',
-                style: TextStyle(
-                  fontFamily: Fonts.disp,
-                  fontSize: own ? 9 : 11,
-                  fontWeight: FontWeight.w700,
-                  color: Pal.cyan,
-                ),
-              ),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                IconText('${th.cost}✦',
+                    style: const TextStyle(
+                        fontFamily: Fonts.disp,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Pal.cyan)),
+                if (app.canThemeTrial) ...[
+                  const SizedBox(width: 6),
+                  _trialPill(app, ti),
+                ],
+              ]),
           ]),
         ]),
       ),
