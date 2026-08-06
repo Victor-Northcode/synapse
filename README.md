@@ -107,8 +107,11 @@ HTML — править только через генератор, чтобы �
    `android/key.properties` (в .gitignore) + signingConfigs в
    `build.gradle.kts`; без key.properties CI собирает debug-подписью.
 3. **iOS.** `NSUserTrackingUsageDescription` уже в Info.plist; сам
-   ATT-алерт показывает UMP — для этого в AdMob → Privacy & messaging
-   должно быть создано ATT/IDFA-сообщение (плюс GDPR-сообщение).
+   ATT-алерт вызывается КОДОМ (Ads.init → канал `synapse/env` →
+   `requestTrackingAuthorization`) до `MobileAds.initialize`, только
+   для 16+ (у детей персонализации нет — трекинга нет). В AdMob →
+   Privacy & messaging всё равно нужно GDPR-сообщение для ЕЭЗ;
+   IDFA-сообщение опционально (алерт покажется и без него).
 
 Правила продукта: rewarded по явному нажатию + interstitial между
 уровнями (только после победы, каждый 3-й уровень с частотным капом —

@@ -1,19 +1,31 @@
+import AppTrackingTransparency
 import Flutter
 import UIKit
 
-/// Мост в Dart: собрана ли программа из TestFlight (у sandbox-чека
-/// App Store имя sandboxReceipt). Нужно рекламе: TestFlight — это
-/// release-конфигурация, kDebugMode там false, но крутить боевые
-/// блоки в тестовой сборке нельзя — там включаются тестовые.
+/// Мост в Dart, два вызова:
+/// - isTestFlight: собрана ли программа из TestFlight (у sandbox-чека
+///   App Store имя sandboxReceipt). TestFlight — release-конфигурация,
+///   kDebugMode там false, но крутить боевые блоки нельзя — включаются
+///   тестовые.
+/// - requestTracking: системный ATT-алерт. Вызывается из Ads.init()
+///   ДО инициализации рекламного SDK — Apple требует показывать запрос
+///   до начала отслеживания (Guideline 5.1.2).
 private class EnvChannel: NSObject, FlutterPlugin {
   static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(
       name: "synapse/env", binaryMessenger: registrar.messenger())
     channel.setMethodCallHandler { call, result in
-      if call.method == "isTestFlight" {
+      switch call.method {
+      case "isTestFlight":
         let receipt = Bundle.main.appStoreReceiptURL?.lastPathComponent
         result(receipt == "sandboxReceipt")
-      } else {
+      case "requestTracking":
+        // Повторный вызов при уже данном ответе безвреден: система
+        // возвращает сохранённый статус без показа алерта.
+        ATTrackingManager.requestTrackingAuthorization { status in
+          DispatchQueue.main.async { result(Int(status.rawValue)) }
+        }
+      default:
         result(FlutterMethodNotImplemented)
       }
     }

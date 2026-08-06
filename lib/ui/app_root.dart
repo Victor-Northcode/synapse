@@ -256,7 +256,6 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
   bool showAgeGate = false;
 
   void _bootDone() {
-    _preloadHubAds();
     setState(() {
       booting = false;
       // Возрастной экран — раньше всего остального (и любой рекламы).
@@ -266,6 +265,10 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
         storyMode = StoryMode.intro;
       }
     });
+    // Предзагрузка дёргает Ads.init() (ATT + согласие) — ей нельзя
+    // стартовать, пока игрок не ответил на возрастном экране: иначе
+    // согласие соберётся в детском режиме и закэшируется.
+    if (!app.needsAgeGate) _preloadHubAds();
     _flushToast();
   }
 
@@ -274,6 +277,7 @@ class _AppRootState extends State<AppRoot> with WidgetsBindingObserver {
       showAgeGate = false;
       if (!app.introSeen) storyMode = StoryMode.intro;
     });
+    _preloadHubAds(); // возраст известен — теперь рекламе можно
     _flushToast();
   }
 

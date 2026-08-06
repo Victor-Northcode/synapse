@@ -80,6 +80,18 @@ class Ads {
     }
   }
 
+  /// Системный ATT-запрос (iOS). Обязателен ДО MobileAds.initialize:
+  /// в анкете App Privacy заявлен трекинг, и ревью проверяет, что алерт
+  /// реально показывается (Guideline 5.1.2). Детям и до-16 не показываем:
+  /// у них персонализация выключена (TFCD/TFUA) — трекинга нет.
+  /// Ответ игрока не трогаем: отказ = неперсонализированная реклама.
+  Future<void> _requestTracking() async {
+    if (kIsWeb || !Platform.isIOS || _age < 16) return;
+    try {
+      await _envChannel.invokeMethod<int>('requestTracking');
+    } catch (_) {}
+  }
+
   // В вебе Platform недоступен и рекламного SDK нет — реклама выключена.
   bool get hasAds => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
   bool get usingTestAds => useTestAds;
@@ -166,6 +178,9 @@ class Ads {
       if (!useTestAds && await _isTestFlight()) useTestAds = true;
       // Возрастная конфигурация — ДО сбора согласия и инициализации.
       await _applyRequestConfig();
+      // ATT — до согласия UMP и инициализации SDK: форма согласия и
+      // первые запросы рекламы должны знать реальный статус IDFA.
+      await _requestTracking();
       await _gatherConsent();
       await MobileAds.instance.initialize();
     }();
